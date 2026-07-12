@@ -1,0 +1,11 @@
+-- Desarrollo local únicamente. No ejecutar en producción.
+insert into public.organizations(id,name,commercial_name) values('10000000-0000-0000-0000-000000000001','CrediCel Honduras','CrediCel');
+insert into public.business_units(id,organization_id,legal_name,commercial_name,owner_name,rtn) values
+('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','CrediCel Centro, S. de R.L.','CrediCel Centro','Socio Centro','08019000000001'),
+('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','CrediCel Norte, S. de R.L.','CrediCel Norte','Socio Norte','08019000000002');
+insert into public.branches(id,organization_id,business_unit_id,name,code,branch_type,address,phone) values
+('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','Centro Tegucigalpa','TGU-CENTRO','store','Tegucigalpa, Honduras','+504 2200-0001'),
+('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','Comayagüela','TGU-COMAYAGUELA','store','Comayagüela, Honduras','+504 2200-0002');
+insert into public.roles(organization_id,name,description,is_system) select '10000000-0000-0000-0000-000000000001',name,description,true from (values
+('super_admin','Administración total'),('organization_admin','Administración organizacional'),('credit_manager','Gerencia de crédito'),('credit_analyst','Análisis de crédito'),('branch_manager','Gerencia de punto'),('salesperson','Ventas'),('cashier','Caja'),('inventory_manager','Inventario'),('collections_agent','Cobranza'),('auditor','Auditoría de solo lectura')) seed(name,description);
+insert into public.configuration_definitions(key,description,value_type,allowed_scope_types) values('credit.minimum_down_payment_percentage','Porcentaje mínimo de prima','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign']),('credit.maximum_term_months','Plazo máximo','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign']),('credit.interest_rate','Tasa de interés configurable','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign']);
