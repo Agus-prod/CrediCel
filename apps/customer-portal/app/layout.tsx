@@ -1,0 +1,1 @@
+import "./globals.css";export default function Layout({children}:{readonly children:React.ReactNode}){return <html lang="es"><body><header className="header">Credi<span>Cel</span></header>{children}</body></html>}

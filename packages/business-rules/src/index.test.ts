@@ -1,0 +1,3 @@
+import { describe, expect, it } from "vitest";
+import { executeRules, type Rule } from "./index.js";
+describe("executeRules", () => { it("evalúa sin código dinámico y conserva prioridad", () => { const rules: Rule[] = [{id:"base",name:"Base",priority:1,enabled:true,conditions:[{field:"price",operator:"greater_than",value:100}],actions:[{type:"add_warning",value:"base"}]},{id:"priority",name:"Priority",priority:10,enabled:true,conditions:[{field:"brand",operator:"equals",value:"Apple"}],actions:[{type:"set_minimum_down_payment",value:35}]}]; const result=executeRules(rules,{price:25000,brand:"Apple"}); expect(result.actions.map((item)=>item.value)).toEqual([35,"base"]); expect(result.evaluations.every((item)=>item.matched)).toBe(true); }); });

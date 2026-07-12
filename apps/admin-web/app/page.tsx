@@ -1,0 +1,3 @@
+import { AppShell } from "@/components/app-shell";
+const metrics=[["Solicitudes por revisar","0"],["Equipos disponibles","0"],["Transferencias en tránsito","0"],["Pagos por validar","0"]] as const;
+export default function Dashboard(){return <AppShell><div className="grid">{metrics.map(([label,value])=><article className="card" key={label}><div className="muted">{label}</div><div className="metric">{value}</div></article>)}</div><section className="section card"><div className="toolbar"><div><h2>Actividad operativa</h2><p className="muted">Datos reales aparecerán al conectar Supabase y cargar el seed local.</p></div></div><div className="empty">Aún no hay actividad registrada.</div></section></AppShell>}

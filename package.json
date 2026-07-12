@@ -1,0 +1,1 @@
+{"name":"credicel","version":"0.1.0","private":true,"packageManager":"pnpm@10.12.1","scripts":{"dev":"turbo dev","build":"turbo build","lint":"turbo lint","typecheck":"turbo typecheck","test":"turbo test"},"devDependencies":{"prettier":"^3.5.3","turbo":"^2.5.4","typescript":"^5.8.3"},"engines":{"node":">=20"}}
