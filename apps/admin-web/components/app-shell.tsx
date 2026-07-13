@@ -2,23 +2,41 @@ import Link from "next/link";
 import { logout } from "@/app/login/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-const items = [
-  ["/", "Dashboard", ["all"]], ["/clientes", "Clientes", ["salesperson", "branch_manager", "credit_analyst", "credit_manager", "organization_admin", "super_admin"]],
-  ["/expedientes", "Expedientes", ["salesperson", "credit_analyst", "credit_manager", "organization_admin", "super_admin"]], ["/solicitudes", "Solicitudes", ["salesperson", "credit_analyst", "credit_manager", "branch_manager", "organization_admin", "super_admin"]],
-  ["/creditos", "Créditos", ["credit_analyst", "credit_manager", "collections_agent", "organization_admin", "super_admin"]], ["/inventario", "Inventario", ["inventory_manager", "branch_manager", "salesperson", "organization_admin", "super_admin"]],
-  ["/transferencias", "Transferencias", ["inventory_manager", "branch_manager", "organization_admin", "super_admin"]], ["/pagos", "Pagos", ["cashier", "credit_manager", "organization_admin", "super_admin"]],
-  ["/cobranza", "Cobranza", ["collections_agent", "credit_manager", "organization_admin", "super_admin"]], ["/organizacion", "Organización", ["organization_admin", "super_admin"]],
-  ["/usuarios", "Usuarios y accesos", ["organization_admin", "super_admin"]], ["/configuracion", "Configuración", ["organization_admin", "super_admin"]], ["/auditoria", "Auditoría", ["auditor", "organization_admin", "super_admin"]],
-] as const;
+type NavItem = readonly [string, string, readonly string[]];
+const items: readonly NavItem[] = [
+  ["/", "Inicio", ["all"]],
+  ["/ventas", "Nueva venta", ["salesperson", "branch_manager"]],
+  ["/mis-ventas", "Mis ventas", ["salesperson"]],
+  ["/clientes", "Mi cartera", ["salesperson"]],
+  ["/clientes", "Clientes", ["branch_manager", "credit_manager", "organization_admin", "organization_owner", "super_admin"]],
+  ["/solicitudes", "Mesa de análisis", ["credit_analyst", "credit_manager"]],
+  ["/solicitudes", "Solicitudes de la tienda", ["branch_manager"]],
+  ["/solicitudes", "Solicitudes", ["organization_admin", "organization_owner", "super_admin"]],
+  ["/inventario", "Dispositivos disponibles", ["salesperson"]],
+  ["/inventario", "Dispositivos", ["inventory_manager", "branch_manager", "organization_admin", "organization_owner", "super_admin"]],
+  ["/transferencias", "Traslados", ["inventory_manager", "branch_manager", "organization_admin", "organization_owner", "super_admin"]],
+  ["/pagos", "Caja y pagos", ["cashier", "branch_manager", "organization_admin", "organization_owner", "super_admin"]],
+  ["/cobranza", "Cobranza", ["collections_agent", "credit_manager", "organization_admin", "organization_owner", "super_admin"]],
+  ["/organizacion", "Tiendas", ["organization_admin", "organization_owner", "super_admin"]],
+  ["/usuarios", "Equipo y accesos", ["organization_admin", "organization_owner", "super_admin"]],
+  ["/suscripcion", "Plan y suscripción", ["organization_owner"]],
+  ["/configuracion", "Configuración", ["organization_admin", "organization_owner", "super_admin"]],
+  ["/auditoria", "Auditoría", ["auditor", "organization_owner", "super_admin"]],
+];
+
+const roleLabels: Readonly<Record<string, string>> = { organization_owner: "Propietario", organization_admin: "Administrador", branch_manager: "Gerente de tienda", credit_analyst: "Analista de crédito", credit_manager: "Jefe de crédito", salesperson: "Vendedor", cashier: "Caja", inventory_manager: "Inventario", collections_agent: "Cobranza", auditor: "Auditor", super_admin: "Superadministrador" };
 
 export async function AppShell({ children }: { readonly children: React.ReactNode }) {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = user ? await supabase.from("profiles").select("full_name").eq("id", user.id).single() : { data: null };
-  const { data: assigned } = user ? await supabase.from("profile_roles").select("roles(name)").eq("profile_id", user.id) : { data: [] };
-  type RoleRelation = { readonly name: string } | readonly { readonly name: string }[] | null;
-  const relation = assigned?.[0]?.roles as unknown as RoleRelation;
-  const role = (Array.isArray(relation) ? relation[0]?.name : (relation as { readonly name: string } | null)?.name) ?? "salesperson";
-  const visible = items.filter(([, , roles]) => (roles as readonly string[]).includes("all") || (roles as readonly string[]).includes(role));
-  return <div className="shell"><aside className="sidebar"><div className="logo">Credi<span>Cel</span></div><div className="user-chip"><div className="avatar">{profile?.full_name?.slice(0, 1) ?? "C"}</div><div><strong>{profile?.full_name ?? "Equipo CrediCel"}</strong><small>{role.replaceAll("_", " ")}</small></div></div><nav>{visible.map(([href, label]) => <Link className="navlink" href={href} key={href}>{label}</Link>)}</nav><form action={logout}><button className="logout" type="submit">Cerrar sesión</button></form></aside><main className="main"><header className="top"><div><div className="eyebrow">Centro de operaciones</div><h1>CrediCel</h1></div><select className="context" aria-label="Punto de venta"><option>Toda la organización</option><option>Centro Tegucigalpa</option><option>Comayagüela</option></select></header><div className="content-enter">{children}</div><footer>Desarrollado por <strong>CrediCel</strong> · Tecnología que impulsa oportunidades</footer></main></div>;
+  const { data: assigned } = user ? await supabase.from("profile_roles").select("roles(name),branch_id,branches(name)").eq("profile_id", user.id) : { data: [] };
+  const relationName = (value: unknown) => Array.isArray(value) ? (value[0] as { name?: string } | undefined)?.name : (value as { name?: string } | null)?.name;
+  const roles = new Set((assigned ?? []).map((row) => relationName(row.roles)).filter((value): value is string => Boolean(value)));
+  if (roles.size === 0) roles.add("salesperson");
+  const visible = items.filter(([, , allowed]) => allowed.includes("all") || allowed.some((role) => roles.has(role))).filter((item, index, all) => all.findIndex(([href]) => href === item[0]) === index);
+  const branchNames = [...new Set((assigned ?? []).map((row) => relationName(row.branches)).filter(Boolean))];
+  const globalScope = roles.has("organization_owner") || roles.has("organization_admin") || roles.has("super_admin");
+  const roleSummary = [...roles].map((role) => roleLabels[role] ?? role).join(" · ");
+  return <div className="shell"><aside className="sidebar"><div className="logo">Credi<span>Cel</span></div><div className="user-chip"><div className="avatar">{profile?.full_name?.slice(0, 1) ?? "C"}</div><div><strong>{profile?.full_name ?? "Equipo CrediCel"}</strong><small>{roleSummary}</small></div></div><nav>{visible.map(([href, label]) => <Link className="navlink" href={href} key={`${href}-${label}`}>{label}</Link>)}</nav><form action={logout}><button className="logout" type="submit">Cerrar sesión</button></form></aside><main className="main"><header className="top"><div><div className="eyebrow">Centro de operaciones</div><h1>CrediCel</h1></div><div className="scope-chip"><small>Vista actual</small><strong>{globalScope ? "Toda mi organización" : branchNames.join(", ") || "Mi tienda"}</strong></div></header><div className="content-enter">{children}</div><footer>Desarrollado por <strong>CrediCel</strong> · Tecnología que impulsa oportunidades</footer></main></div>;
 }

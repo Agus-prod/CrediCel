@@ -953,6 +953,65 @@ export type Database = {
           },
         ]
       }
+      customer_assignments: {
+        Row: {
+          assigned_at: string
+          branch_id: string
+          customer_id: string
+          ended_at: string | null
+          id: string
+          organization_id: string
+          salesperson_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          branch_id: string
+          customer_id: string
+          ended_at?: string | null
+          id?: string
+          organization_id: string
+          salesperson_id: string
+        }
+        Update: {
+          assigned_at?: string
+          branch_id?: string
+          customer_id?: string
+          ended_at?: string | null
+          id?: string
+          organization_id?: string
+          salesperson_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_assignments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_assignments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_assignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_assignments_salesperson_id_fkey"
+            columns: ["salesperson_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_consents: {
         Row: {
           consent_type: string
