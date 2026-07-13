@@ -16,8 +16,9 @@ export async function AppShell({ children }: { readonly children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = user ? await supabase.from("profiles").select("full_name").eq("id", user.id).single() : { data: null };
   const { data: assigned } = user ? await supabase.from("profile_roles").select("roles(name)").eq("profile_id", user.id) : { data: [] };
-  const relation = assigned?.[0]?.roles;
-  const role = relation?.[0]?.name ?? "salesperson";
+  type RoleRelation = { readonly name: string } | readonly { readonly name: string }[] | null;
+  const relation = assigned?.[0]?.roles as unknown as RoleRelation;
+  const role = (Array.isArray(relation) ? relation[0]?.name : (relation as { readonly name: string } | null)?.name) ?? "salesperson";
   const visible = items.filter(([, , roles]) => (roles as readonly string[]).includes("all") || (roles as readonly string[]).includes(role));
   return <div className="shell"><aside className="sidebar"><div className="logo">Credi<span>Cel</span></div><div className="user-chip"><div className="avatar">{profile?.full_name?.slice(0, 1) ?? "C"}</div><div><strong>{profile?.full_name ?? "Equipo CrediCel"}</strong><small>{role.replaceAll("_", " ")}</small></div></div><nav>{visible.map(([href, label]) => <Link className="navlink" href={href} key={href}>{label}</Link>)}</nav><form action={logout}><button className="logout" type="submit">Cerrar sesión</button></form></aside><main className="main"><header className="top"><div><div className="eyebrow">Centro de operaciones</div><h1>CrediCel</h1></div><select className="context" aria-label="Punto de venta"><option>Toda la organización</option><option>Centro Tegucigalpa</option><option>Comayagüela</option></select></header><div className="content-enter">{children}</div><footer>Desarrollado por <strong>CrediCel</strong> · Tecnología que impulsa oportunidades</footer></main></div>;
 }
