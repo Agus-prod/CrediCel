@@ -524,6 +524,70 @@ export type Database = {
           },
         ]
       }
+      credit_accounts: {
+        Row: {
+          activated_at: string
+          application_id: string
+          customer_id: string
+          down_payment: number
+          id: string
+          installment_amount: number
+          organization_id: string
+          outstanding_balance: number
+          principal: number
+          status: string
+          term: number
+        }
+        Insert: {
+          activated_at?: string
+          application_id: string
+          customer_id: string
+          down_payment: number
+          id?: string
+          installment_amount: number
+          organization_id: string
+          outstanding_balance: number
+          principal: number
+          status: string
+          term: number
+        }
+        Update: {
+          activated_at?: string
+          application_id?: string
+          customer_id?: string
+          down_payment?: number
+          id?: string
+          installment_amount?: number
+          organization_id?: string
+          outstanding_balance?: number
+          principal?: number
+          status?: string
+          term?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_accounts_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: true
+            referencedRelation: "credit_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_accounts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_application_assignments: {
         Row: {
           analyst_id: string
@@ -902,6 +966,54 @@ export type Database = {
           },
         ]
       }
+      credit_installments: {
+        Row: {
+          account_id: string
+          amount: number
+          due_date: string
+          id: string
+          installment_number: number
+          organization_id: string
+          paid_amount: number
+          status: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          due_date: string
+          id?: string
+          installment_number: number
+          organization_id: string
+          paid_amount?: number
+          status: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          due_date?: string
+          id?: string
+          installment_number?: number
+          organization_id?: string
+          paid_amount?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_installments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "credit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_installments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_addresses: {
         Row: {
           address: string
@@ -1146,6 +1258,51 @@ export type Database = {
           },
           {
             foreignKeyName: "customer_employment_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_portal_access: {
+        Row: {
+          access_token: string
+          created_at: string
+          customer_id: string
+          expires_at: string | null
+          id: string
+          organization_id: string
+          revoked_at: string | null
+        }
+        Insert: {
+          access_token?: string
+          created_at?: string
+          customer_id: string
+          expires_at?: string | null
+          id?: string
+          organization_id: string
+          revoked_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          customer_id?: string
+          expires_at?: string | null
+          id?: string
+          organization_id?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_portal_access_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_portal_access_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1840,6 +1997,65 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_applications: {
+        Row: {
+          account_id: string
+          amount: number
+          applied_at: string
+          applied_by: string | null
+          id: string
+          organization_id: string
+          transfer_report_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          applied_at?: string
+          applied_by?: string | null
+          id?: string
+          organization_id: string
+          transfer_report_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          applied_at?: string
+          applied_by?: string | null
+          id?: string
+          organization_id?: string
+          transfer_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_applications_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "credit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_applications_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_applications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_applications_transfer_report_id_fkey"
+            columns: ["transfer_report_id"]
+            isOneToOne: true
+            referencedRelation: "transfer_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permissions: {
         Row: {
           code: string
@@ -2522,6 +2738,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      attach_customer_receipt: {
+        Args: { p_report_id: string; p_storage_path: string; p_token: string }
+        Returns: undefined
+      }
+      create_inventory_transfer: {
+        Args: {
+          p_destination: string
+          p_inventory_ids: string[]
+          p_origin: string
+        }
+        Returns: string
+      }
       create_organization_onboarding: {
         Args: {
           p_address: string
@@ -2536,6 +2764,7 @@ export type Database = {
         }
         Returns: string
       }
+      customer_portal_summary: { Args: { p_token: string }; Returns: Json }
       dashboard_metrics: { Args: never; Returns: Json }
       decide_credit_application: {
         Args: {
@@ -2554,6 +2783,19 @@ export type Database = {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
         Returns: undefined
       }
+      report_customer_payment: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_bank_account_id: string
+          p_date: string
+          p_holder: string
+          p_origin_bank: string
+          p_reference: string
+          p_token: string
+        }
+        Returns: string
+      }
       submit_credit_application: {
         Args: {
           p_branch_id: string
@@ -2568,6 +2810,10 @@ export type Database = {
           p_term: number
         }
         Returns: string
+      }
+      validate_customer_payment: {
+        Args: { p_approve: boolean; p_notes: string; p_report_id: string }
+        Returns: undefined
       }
     }
     Enums: {

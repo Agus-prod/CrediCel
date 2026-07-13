@@ -1,0 +1,2 @@
+"use server";import{redirect}from"next/navigation";import{createServerSupabase}from"@/lib/supabase/server";
+export async function validatePayment(formData:FormData){const supabase=await createServerSupabase();const{error}=await supabase.rpc("validate_customer_payment",{p_report_id:String(formData.get("report_id")??""),p_approve:String(formData.get("decision"))==="approve",p_notes:String(formData.get("notes")??"")});if(error)redirect(`/pagos?error=${encodeURIComponent(error.message)}`);redirect("/pagos?updated=1")}
