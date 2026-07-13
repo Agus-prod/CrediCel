@@ -1,0 +1,2 @@
+update public.credit_installments i set due_date=current_date-10,status=case when paid_amount>=amount then 'paid'else 'overdue'end from public.credit_accounts ca where ca.id=i.account_id and ca.customer_id=(select customer_id from public.customer_portal_access where access_token='11111111-1111-1111-1111-111111111111')and i.installment_number=1;
+update public.credit_accounts ca set status='delinquent'where ca.customer_id=(select customer_id from public.customer_portal_access where access_token='11111111-1111-1111-1111-111111111111')and ca.outstanding_balance>0;

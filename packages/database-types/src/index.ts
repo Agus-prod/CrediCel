@@ -297,6 +297,61 @@ export type Database = {
           },
         ]
       }
+      collection_actions: {
+        Row: {
+          account_id: string
+          action_type: string
+          actor_id: string
+          created_at: string
+          id: string
+          notes: string
+          organization_id: string
+          promised_date: string | null
+        }
+        Insert: {
+          account_id: string
+          action_type: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          notes: string
+          organization_id: string
+          promised_date?: string | null
+        }
+        Update: {
+          account_id?: string
+          action_type?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          notes?: string
+          organization_id?: string
+          promised_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "credit_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_actions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       configuration_audit_logs: {
         Row: {
           action: string
@@ -2789,6 +2844,15 @@ export type Database = {
       receive_inventory_transfer: {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
         Returns: undefined
+      }
+      record_collection_action: {
+        Args: {
+          p_account_id: string
+          p_action_type: string
+          p_notes: string
+          p_promised_date?: string
+        }
+        Returns: string
       }
       report_customer_payment: {
         Args: {
