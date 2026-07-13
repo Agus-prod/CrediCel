@@ -2350,6 +2350,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dashboard_metrics: { Args: never; Returns: Json }
       dispatch_inventory_transfer: {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
         Returns: undefined

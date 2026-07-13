@@ -1,0 +1,3 @@
+import {createServerClient,type CookieOptions} from "@supabase/ssr";import {cookies} from "next/headers";
+type CookieWrite={readonly name:string;readonly value:string;readonly options:CookieOptions};
+export async function createServerSupabase(){const cookieStore=await cookies();const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;if(!url||!key)throw new Error("Configuración de conexión incompleta");return createServerClient(url,key,{cookies:{getAll:()=>cookieStore.getAll(),setAll:(values:CookieWrite[])=>{try{values.forEach(({name,value,options})=>cookieStore.set(name,value,options))}catch{}}}})}
