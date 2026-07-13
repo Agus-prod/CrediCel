@@ -1,0 +1,4 @@
+"use server";
+import { redirect } from "next/navigation";
+import { createServerSupabase } from "@/lib/supabase/server";
+export async function submitCreditApplication(formData: FormData) { const supabase=await createServerSupabase(); const number=(name:string)=>Number(formData.get(name)??0); const {data,error}=await supabase.rpc("submit_credit_application",{p_branch_id:String(formData.get("branch_id")??""),p_inventory_unit_id:String(formData.get("inventory_unit_id")??""),p_dni:String(formData.get("dni")??""),p_first_name:String(formData.get("first_name")??""),p_last_name:String(formData.get("last_name")??""),p_phone:String(formData.get("phone")??""),p_email:String(formData.get("email")??""),p_requested_price:number("requested_price"),p_down_payment:number("down_payment"),p_term:number("term")}); if(error)redirect(`/ventas?error=${encodeURIComponent(error.message)}`);redirect(`/mis-ventas?created=${data}`); }

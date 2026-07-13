@@ -2537,6 +2537,15 @@ export type Database = {
         Returns: string
       }
       dashboard_metrics: { Args: never; Returns: Json }
+      decide_credit_application: {
+        Args: {
+          p_application_id: string
+          p_conditions?: Json
+          p_decision: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
       dispatch_inventory_transfer: {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
         Returns: undefined
@@ -2544,6 +2553,21 @@ export type Database = {
       receive_inventory_transfer: {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
         Returns: undefined
+      }
+      submit_credit_application: {
+        Args: {
+          p_branch_id: string
+          p_dni: string
+          p_down_payment: number
+          p_email: string
+          p_first_name: string
+          p_inventory_unit_id: string
+          p_last_name: string
+          p_phone: string
+          p_requested_price: number
+          p_term: number
+        }
+        Returns: string
       }
     }
     Enums: {
