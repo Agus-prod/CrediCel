@@ -1,0 +1,2 @@
+"use server";import{redirect}from"next/navigation";import{createServerSupabase}from"@/lib/supabase/server";
+export async function addBranch(formData:FormData){const s=await createServerSupabase();const{error}=await s.rpc("create_branch",{p_name:String(formData.get("name")??""),p_code:String(formData.get("code")??""),p_address:String(formData.get("address")??""),p_phone:String(formData.get("phone")??"")});if(error)redirect(`/organizacion?error=${encodeURIComponent(error.message)}`);redirect("/organizacion?created=1")}
