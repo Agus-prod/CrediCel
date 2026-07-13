@@ -1,0 +1,1 @@
+import{requireAnyRole}from"@/lib/authz";export default async function OwnerSubscriptionLayout({children}:{readonly children:React.ReactNode}){await requireAnyRole(["organization_owner"]);return children}

@@ -1,0 +1,1 @@
+import{requireAnyRole}from"@/lib/authz";export default async function TransfersLayout({children}:{readonly children:React.ReactNode}){await requireAnyRole(["inventory_manager","branch_manager","organization_admin","organization_owner","super_admin"]);return children}

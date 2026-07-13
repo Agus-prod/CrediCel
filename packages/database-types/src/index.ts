@@ -2462,6 +2462,7 @@ export type Database = {
           features: Json
           id: string
           limits: Json
+          monthly_price: number
           name: string
           status: Database["public"]["Enums"]["entity_status"]
           trial_days: number
@@ -2472,6 +2473,7 @@ export type Database = {
           features?: Json
           id?: string
           limits?: Json
+          monthly_price?: number
           name: string
           status?: Database["public"]["Enums"]["entity_status"]
           trial_days?: number
@@ -2482,6 +2484,7 @@ export type Database = {
           features?: Json
           id?: string
           limits?: Json
+          monthly_price?: number
           name?: string
           status?: Database["public"]["Enums"]["entity_status"]
           trial_days?: number
@@ -2742,6 +2745,10 @@ export type Database = {
         Args: { p_report_id: string; p_storage_path: string; p_token: string }
         Returns: undefined
       }
+      change_subscription_plan: {
+        Args: { p_plan_code: string }
+        Returns: undefined
+      }
       create_inventory_transfer: {
         Args: {
           p_destination: string
@@ -2811,6 +2818,7 @@ export type Database = {
         }
         Returns: string
       }
+      subscription_summary: { Args: never; Returns: Json }
       validate_customer_payment: {
         Args: { p_approve: boolean; p_notes: string; p_report_id: string }
         Returns: undefined
