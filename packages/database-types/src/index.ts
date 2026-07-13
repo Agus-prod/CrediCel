@@ -2350,6 +2350,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_organization_onboarding: {
+        Args: {
+          p_address: string
+          p_branch_code: string
+          p_branch_name: string
+          p_commercial_name: string
+          p_legal_name: string
+          p_name: string
+          p_owner_name: string
+          p_phone: string
+          p_rtn: string
+        }
+        Returns: string
+      }
       dashboard_metrics: { Args: never; Returns: Json }
       dispatch_inventory_transfer: {
         Args: { p_scanned_imeis: string[]; p_transfer_id: string }
