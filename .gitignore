@@ -6,4 +6,5 @@ coverage
 .env
 .env.local
 *.tsbuildinfo
+*.log
 supabase/.temp
