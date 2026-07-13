@@ -1709,6 +1709,51 @@ export type Database = {
           },
         ]
       }
+      organization_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          plan_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string
+          trial_started_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          plan_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string
+          trial_started_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          plan_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string
+          trial_started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           commercial_name: string
@@ -2135,6 +2180,74 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          code: string
+          created_at: string
+          features: Json
+          id: string
+          limits: Json
+          name: string
+          status: Database["public"]["Enums"]["entity_status"]
+          trial_days: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          features?: Json
+          id?: string
+          limits?: Json
+          name: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          trial_days?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          features?: Json
+          id?: string
+          limits?: Json
+          name?: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          trial_days?: number
+        }
+        Relationships: []
+      }
+      subscription_usage: {
+        Row: {
+          id: string
+          metric: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          used: number
+        }
+        Insert: {
+          id?: string
+          metric: string
+          organization_id: string
+          period_end: string
+          period_start: string
+          used?: number
+        }
+        Update: {
+          id?: string
+          metric?: string
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          used?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_usage_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transfer_report_files: {
         Row: {
           created_at: string
@@ -2405,6 +2518,14 @@ export type Database = {
         | "recovered"
         | "released"
         | "lost"
+      subscription_status:
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "grace_period"
+        | "suspended"
+        | "cancelled"
+        | "expired"
       transfer_report_status:
         | "reported"
         | "under_review"
@@ -3035,6 +3156,15 @@ export const Constants = {
         "recovered",
         "released",
         "lost",
+      ],
+      subscription_status: [
+        "trialing",
+        "active",
+        "past_due",
+        "grace_period",
+        "suspended",
+        "cancelled",
+        "expired",
       ],
       transfer_report_status: [
         "reported",
