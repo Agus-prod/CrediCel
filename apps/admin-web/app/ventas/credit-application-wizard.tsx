@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import {
   ArrowLeft,
@@ -390,6 +390,364 @@ function ReferenceCard({
   );
 }
 
+const stepIcons = [
+  ScanLine,
+  ShieldCheck,
+  ContactRound,
+  FileImage,
+  Smartphone,
+] as const;
+
+function ApplicationStepper({
+  currentStep,
+  onStepChange,
+}: Readonly<{
+  currentStep: number;
+  onStepChange: (step: number) => void;
+}>) {
+  const activeStep = steps[currentStep - 1] ?? steps[0];
+  const activeButtonRef = useRef<HTMLButtonElement>(null);
+  const progress = ((currentStep - 1) / (steps.length - 1)) * 100;
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    activeButtonRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [currentStep]);
+
+  return (
+    <nav className="applicationStepper" aria-label="Progreso de la solicitud">
+      <div className="stepperHeading">
+        <div>
+          <span className="stepperEyebrow">Solicitud de crédito</span>
+          <strong aria-atomic="true" aria-live="polite">
+            {activeStep.title}
+          </strong>
+        </div>
+        <div className="stepperCount" aria-label={`Paso ${currentStep} de 5`}>
+          <small>Progreso</small>
+          <strong>
+            {currentStep} <span>/ {steps.length}</span>
+          </strong>
+        </div>
+      </div>
+
+      <div className="stepperTrack" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+
+      <ol>
+        {steps.map((item, index) => {
+          const number = index + 1;
+          const completed = number < currentStep;
+          const active = number === currentStep;
+          const Icon = stepIcons[index] ?? ScanLine;
+          const state = completed
+            ? "completed"
+            : active
+              ? "active"
+              : "upcoming";
+
+          return (
+            <li data-state={state} key={item.short}>
+              <button
+                aria-current={active ? "step" : undefined}
+                disabled={number > currentStep}
+                onClick={() => onStepChange(number)}
+                ref={active ? activeButtonRef : undefined}
+                type="button"
+              >
+                <span className="stepMarker">
+                  {completed ? (
+                    <Check aria-hidden="true" size={18} strokeWidth={3} />
+                  ) : (
+                    <Icon aria-hidden="true" size={18} strokeWidth={2.2} />
+                  )}
+                </span>
+                <span className="stepCopy">
+                  <small>Paso {number}</small>
+                  <strong>{item.short}</strong>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      <style jsx>{`
+        .applicationStepper {
+          display: grid;
+          gap: 14px;
+          padding: 18px 20px 20px;
+          border: 1px solid #d7e5df;
+          border-radius: 20px;
+          background:
+            radial-gradient(
+              circle at 100% 0,
+              rgba(8, 118, 83, 0.08),
+              transparent 28%
+            ),
+            #ffffff;
+          box-shadow: 0 14px 34px rgba(14, 58, 44, 0.08);
+        }
+
+        .stepperHeading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .stepperHeading > div:first-child {
+          display: grid;
+          min-width: 0;
+          gap: 3px;
+        }
+
+        .stepperEyebrow {
+          color: #087653;
+          font-size: 0.65rem;
+          font-weight: 850;
+          letter-spacing: 0.11em;
+          text-transform: uppercase;
+        }
+
+        .stepperHeading > div:first-child > strong {
+          overflow: hidden;
+          color: #142b23;
+          font-size: 1rem;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .stepperCount {
+          display: flex;
+          flex: 0 0 auto;
+          align-items: baseline;
+          gap: 8px;
+          padding: 7px 11px;
+          border: 1px solid #d7e7e0;
+          border-radius: 999px;
+          background: #f4faf7;
+        }
+
+        .stepperCount small {
+          color: #52665e;
+          font-size: 0.65rem;
+          font-weight: 700;
+        }
+
+        .stepperCount strong {
+          color: #087653;
+          font-size: 0.86rem;
+        }
+
+        .stepperCount strong span {
+          color: #82938c;
+          font-weight: 650;
+        }
+
+        .stepperTrack {
+          height: 6px;
+          overflow: hidden;
+          border-radius: 99px;
+          background: #e8efec;
+        }
+
+        .stepperTrack span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #087653, #24a779 72%, #f4bd3f);
+          box-shadow: 0 0 14px rgba(8, 118, 83, 0.24);
+          transition: width 0.35s ease;
+        }
+
+        ol {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 9px;
+          margin: 0;
+          padding: 0;
+          list-style: none;
+        }
+
+        li {
+          min-width: 0;
+        }
+
+        button {
+          display: grid;
+          width: 100%;
+          min-height: 68px;
+          grid-template-columns: 40px minmax(0, 1fr);
+          align-items: center;
+          gap: 9px;
+          padding: 9px;
+          color: #587068;
+          text-align: left;
+          border: 1px solid #e3ece8;
+          border-radius: 14px;
+          background: #f8fbfa;
+          cursor: pointer;
+          transition:
+            transform 0.18s ease,
+            border-color 0.18s ease,
+            box-shadow 0.18s ease,
+            background 0.18s ease;
+        }
+
+        button:disabled {
+          cursor: default;
+          opacity: 1;
+        }
+
+        button:not(:disabled):hover {
+          border-color: #9dcfbc;
+          transform: translateY(-1px);
+        }
+
+        button:focus-visible {
+          outline: 3px solid #f4bd3f;
+          outline-offset: 2px;
+        }
+
+        .stepMarker {
+          display: grid;
+          width: 40px;
+          height: 40px;
+          place-items: center;
+          border: 1px solid #d5e2dd;
+          border-radius: 12px;
+          background: #ffffff;
+          color: #7a8d86;
+        }
+
+        .stepCopy {
+          display: grid;
+          min-width: 0;
+          gap: 2px;
+        }
+
+        .stepCopy small {
+          color: #52665e;
+          font-size: 0.58rem;
+          font-weight: 750;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+
+        .stepCopy strong {
+          overflow: hidden;
+          font-size: 0.74rem;
+          line-height: 1.2;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        li[data-state="active"] button {
+          border-color: #0a6f51;
+          background: linear-gradient(140deg, #0a6f51, #075c44);
+          color: #ffffff;
+          box-shadow: 0 10px 22px rgba(8, 98, 72, 0.2);
+          transform: translateY(-1px);
+        }
+
+        li[data-state="active"] .stepMarker {
+          border-color: rgba(255, 255, 255, 0.26);
+          background: rgba(255, 255, 255, 0.13);
+          color: #f8c74f;
+        }
+
+        li[data-state="active"] .stepCopy small {
+          color: #d2e8e0;
+        }
+
+        li[data-state="completed"] button {
+          border-color: #b7ddce;
+          background: #ecf8f3;
+          color: #086848;
+        }
+
+        li[data-state="completed"] .stepMarker {
+          border-color: #087653;
+          background: #087653;
+          color: #ffffff;
+        }
+
+        @media (max-width: 780px) {
+          .applicationStepper {
+            gap: 12px;
+            padding: 15px;
+            border-radius: 17px;
+          }
+
+          ol {
+            display: flex;
+            overflow-x: auto;
+            margin-inline: -2px;
+            padding: 2px 2px 5px;
+            scrollbar-width: none;
+            scroll-snap-type: x proximity;
+          }
+
+          ol::-webkit-scrollbar {
+            display: none;
+          }
+
+          li {
+            flex: 0 0 132px;
+            scroll-snap-align: start;
+          }
+
+          button {
+            min-height: 62px;
+            grid-template-columns: 36px minmax(0, 1fr);
+            gap: 8px;
+            padding: 8px;
+          }
+
+          .stepMarker {
+            width: 36px;
+            height: 36px;
+            border-radius: 11px;
+          }
+        }
+
+        @media (max-width: 430px) {
+          .stepperHeading > div:first-child > strong {
+            font-size: 0.92rem;
+          }
+
+          .stepperCount small {
+            display: none;
+          }
+
+          .stepperCount {
+            padding: 7px 10px;
+          }
+
+          li {
+            flex-basis: 124px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .stepperTrack span,
+          button {
+            transition: none;
+          }
+        }
+      `}</style>
+    </nav>
+  );
+}
+
 export function CreditApplicationWizard({
   branches,
   error,
@@ -425,6 +783,15 @@ export function CreditApplicationWizard({
   >("idle");
   const [lookupMessage, setLookupMessage] = useState("");
   const [contactMessage, setContactMessage] = useState("");
+  const previousStep = useRef(step);
+
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    formRef.current
+      ?.querySelector<HTMLElement>(`[data-wizard-step="${step}"] h2`)
+      ?.focus({ preventScroll: true });
+  }, [step]);
 
   const branchInventory = useMemo(
     () =>
@@ -680,29 +1047,7 @@ export function CreditApplicationWizard({
         </div>
       ) : null}
 
-      <ol className="wizard-progress" aria-label="Progreso de la solicitud">
-        {steps.map((item, index) => {
-          const number = index + 1;
-          const completed = number < step;
-          return (
-            <li
-              className={`${number === step ? "active" : ""} ${completed ? "completed" : ""}`}
-              key={item.short}
-            >
-              <button
-                disabled={number > step}
-                onClick={() => goToStep(number)}
-                type="button"
-              >
-                <span>
-                  {completed ? <Check aria-hidden="true" size={15} /> : number}
-                </span>
-                <small>{item.short}</small>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+      <ApplicationStepper currentStep={step} onStepChange={goToStep} />
 
       <form
         action={submitWithIdentityFiles}
@@ -720,7 +1065,7 @@ export function CreditApplicationWizard({
             </div>
             <div>
               <span>Paso 1 de 5</span>
-              <h2>Escanear identidad</h2>
+              <h2 tabIndex={-1}>Escanear identidad</h2>
               <p>
                 Fotografía el frente y reverso. El sistema leerá los datos y
                 guardará ambas imágenes en el expediente.
@@ -907,7 +1252,7 @@ export function CreditApplicationWizard({
             </div>
             <div>
               <span>Paso 2 de 5</span>
-              <h2>Domicilio e ingresos</h2>
+              <h2 tabIndex={-1}>Domicilio e ingresos</h2>
               <p>
                 Completa únicamente la información necesaria para evaluar
                 capacidad de pago.
@@ -988,7 +1333,7 @@ export function CreditApplicationWizard({
             </div>
             <div>
               <span>Paso 3 de 5</span>
-              <h2>Referencias personales</h2>
+              <h2 tabIndex={-1}>Referencias personales</h2>
               <p>
                 Elige contactos del teléfono o importa sus tarjetas para
                 completar nombre y número.
@@ -1031,7 +1376,7 @@ export function CreditApplicationWizard({
             </div>
             <div>
               <span>Paso 4 de 5</span>
-              <h2>Documentos complementarios</h2>
+              <h2 tabIndex={-1}>Documentos complementarios</h2>
               <p>
                 La identidad ya está guardada. Solo faltan la selfie y el
                 comprobante de domicilio.
@@ -1073,7 +1418,7 @@ export function CreditApplicationWizard({
             </div>
             <div>
               <span>Paso 5 de 5</span>
-              <h2>Dispositivo y condiciones</h2>
+              <h2 tabIndex={-1}>Dispositivo y condiciones</h2>
               <p>
                 Selecciona el equipo. El precio, la prima mínima y el plazo
                 sugerido se completan automáticamente.
