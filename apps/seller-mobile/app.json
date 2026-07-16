@@ -9,7 +9,8 @@
       "bundleIdentifier": "com.credicel.seller"
     },
     "android": {
-      "package": "com.credicel.seller"
+      "package": "com.credicel.seller",
+      "blockedPermissions": ["android.permission.WRITE_CONTACTS"]
     },
     "plugins": [
       [
@@ -17,6 +18,12 @@
         {
           "cameraPermission": "CrediCel usa la cámara para capturar el expediente autorizado por el cliente.",
           "photosPermission": "CrediCel puede acceder a fotografías elegidas para completar un expediente."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "CrediCel usa el contacto elegido para completar las referencias autorizadas por el cliente."
         }
       ]
     ]

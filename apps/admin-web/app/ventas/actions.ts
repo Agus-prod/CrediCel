@@ -15,6 +15,127 @@ const requiredDocuments = [
   "selfie",
   "address_proof",
 ] as const;
+
+export type ExistingCustomerDefaults = {
+  readonly found: boolean;
+  readonly values?: Readonly<Record<string, string>>;
+};
+
+export async function lookupExistingCustomer(
+  dni: string,
+): Promise<ExistingCustomerDefaults> {
+  const normalizedDni = dni.replace(/\D/g, "");
+  if (normalizedDni.length !== 13) return { found: false };
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { found: false };
+
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("id,first_name,last_name,phone,email")
+    .eq("normalized_dni", normalizedDni)
+    .maybeSingle();
+  if (!customer) return { found: false };
+
+  const [
+    { data: address },
+    { data: employment },
+    { data: references },
+    { data: latestApplication },
+  ] = await Promise.all([
+    supabase
+      .from("customer_addresses")
+      .select("address")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("customer_employment")
+      .select("employer_name,position,monthly_income,started_on")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("customer_references")
+      .select("name,phone,relationship")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(2),
+    supabase
+      .from("credit_applications")
+      .select("id")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const { data: profile } = latestApplication
+    ? await supabase
+        .from("credit_application_profiles")
+        .select(
+          "birth_date,marital_status,dependents,current_address,housing_type,employer_name,job_title,monthly_income,monthly_expenses,employment_months,reference_one_name,reference_one_phone,reference_one_relationship,reference_two_name,reference_two_phone,reference_two_relationship",
+        )
+        .eq("application_id", latestApplication.id)
+        .maybeSingle()
+    : { data: null };
+
+  const monthsEmployed = employment?.started_on
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(employment.started_on).getTime()) /
+            (1000 * 60 * 60 * 24 * 30.4375),
+        ),
+      )
+    : 0;
+
+  return {
+    found: true,
+    values: {
+      first_name: customer.first_name,
+      last_name: customer.last_name,
+      phone: customer.phone,
+      email: customer.email ?? "",
+      birth_date: profile?.birth_date ?? "",
+      marital_status: profile?.marital_status ?? "single",
+      dependents: String(profile?.dependents ?? 0),
+      current_address: profile?.current_address ?? address?.address ?? "",
+      housing_type: profile?.housing_type ?? "owned",
+      employer_name: profile?.employer_name ?? employment?.employer_name ?? "",
+      job_title: profile?.job_title ?? employment?.position ?? "",
+      monthly_income: String(
+        profile?.monthly_income ?? employment?.monthly_income ?? "",
+      ),
+      monthly_expenses: String(profile?.monthly_expenses ?? ""),
+      employment_months: String(
+        (profile?.employment_months ?? monthsEmployed) || "",
+      ),
+      reference_one_name:
+        profile?.reference_one_name ?? references?.[0]?.name ?? "",
+      reference_one_phone:
+        profile?.reference_one_phone ?? references?.[0]?.phone ?? "",
+      reference_one_relationship:
+        profile?.reference_one_relationship ??
+        references?.[0]?.relationship ??
+        "",
+      reference_two_name:
+        profile?.reference_two_name ?? references?.[1]?.name ?? "",
+      reference_two_phone:
+        profile?.reference_two_phone ?? references?.[1]?.phone ?? "",
+      reference_two_relationship:
+        profile?.reference_two_relationship ??
+        references?.[1]?.relationship ??
+        "",
+    },
+  };
+}
+
 export async function submitCreditApplication(formData: FormData) {
   for (const documentType of requiredDocuments) {
     const validationError = validateUpload(formData.get(documentType), {
@@ -32,17 +153,58 @@ export async function submitCreditApplication(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const normalizedDni = text(formData, "dni").replace(/\D/g, "");
+  const applicantPhone = text(formData, "phone").replace(/\D/g, "");
+  const referenceOnePhone = text(formData, "reference_one_phone").replace(
+    /\D/g,
+    "",
+  );
+  const referenceTwoPhone = text(formData, "reference_two_phone").replace(
+    /\D/g,
+    "",
+  );
+  if (normalizedDni.length !== 13) {
+    redirect(
+      `/ventas?error=${encodeURIComponent("El DNI debe contener exactamente 13 dígitos.")}`,
+    );
+  }
+  if (
+    referenceOnePhone.length < 8 ||
+    referenceTwoPhone.length < 8 ||
+    referenceOnePhone === referenceTwoPhone ||
+    referenceOnePhone === applicantPhone ||
+    referenceTwoPhone === applicantPhone
+  ) {
+    redirect(
+      `/ventas?error=${encodeURIComponent("Las dos referencias deben tener teléfonos válidos, distintos entre sí y diferentes al del cliente.")}`,
+    );
+  }
+  const branchId = text(formData, "branch_id");
+  const inventoryUnitId = text(formData, "inventory_unit_id");
+  const { data: selectedInventory } = await supabase
+    .from("inventory_units")
+    .select("cash_price")
+    .eq("id", inventoryUnitId)
+    .eq("current_branch_id", branchId)
+    .eq("status", "available")
+    .maybeSingle();
+  if (!selectedInventory) {
+    redirect(
+      `/ventas?error=${encodeURIComponent("El dispositivo seleccionado ya no está disponible en esta tienda.")}`,
+    );
+  }
+  const requestedPrice = Number(selectedInventory.cash_price);
   const { data, error } = await supabase.rpc(
     "submit_complete_credit_application",
     {
-      p_branch_id: text(formData, "branch_id"),
-      p_inventory_unit_id: text(formData, "inventory_unit_id"),
+      p_branch_id: branchId,
+      p_inventory_unit_id: inventoryUnitId,
       p_dni: text(formData, "dni"),
       p_first_name: text(formData, "first_name"),
       p_last_name: text(formData, "last_name"),
       p_phone: text(formData, "phone"),
       p_email: text(formData, "email"),
-      p_requested_price: number(formData, "requested_price"),
+      p_requested_price: requestedPrice,
       p_down_payment: number(formData, "down_payment"),
       p_term: number(formData, "term"),
       p_birth_date: text(formData, "birth_date"),
@@ -121,11 +283,10 @@ export async function submitCreditApplication(formData: FormData) {
 
   try {
     await executeAndRecordApplicationRules(supabase, String(data), {
-      requested_price: number(formData, "requested_price"),
+      requested_price: requestedPrice,
       proposed_down_payment: number(formData, "down_payment"),
       proposed_down_payment_percentage:
-        (number(formData, "down_payment") * 100) /
-        number(formData, "requested_price"),
+        (number(formData, "down_payment") * 100) / requestedPrice,
       proposed_term: number(formData, "term"),
       monthly_income: number(formData, "monthly_income"),
       monthly_expenses: number(formData, "monthly_expenses"),

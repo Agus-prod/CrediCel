@@ -161,8 +161,13 @@ const relationName = (value: unknown) =>
 
 export async function AppShell({
   children,
+  scopeOverride,
 }: {
   readonly children: React.ReactNode;
+  readonly scopeOverride?: {
+    readonly eyebrow: string;
+    readonly label: string;
+  };
 }) {
   const supabase = await createServerSupabase();
   const {
@@ -229,6 +234,7 @@ export async function AppShell({
       : accessibleBranches.length > 1
         ? "Mis tiendas autorizadas"
         : accessibleBranches[0]?.name || "Sin tienda asignada";
+  const visibleScopeLabel = scopeOverride?.label ?? scopeLabel;
   const roleSummary =
     [...roles].map((role) => roleLabels[role] ?? role).join(" · ") ||
     "Sin rol asignado";
@@ -264,14 +270,21 @@ export async function AppShell({
             <div className="eyebrow">Centro de operaciones</div>
             <div className="brand-title">CrediCel</div>
           </div>
-          <Link
-            aria-label={`Cambiar vista. Vista actual: ${scopeLabel}`}
-            className="scope-chip"
-            href="/seleccionar"
-          >
-            <small>Vista actual</small>
-            <strong>{scopeLabel}</strong>
-          </Link>
+          {scopeOverride ? (
+            <div className="scope-chip scope-chip-static">
+              <small>{scopeOverride.eyebrow}</small>
+              <strong>{visibleScopeLabel}</strong>
+            </div>
+          ) : (
+            <Link
+              aria-label={`Cambiar vista. Vista actual: ${visibleScopeLabel}`}
+              className="scope-chip"
+              href="/seleccionar"
+            >
+              <small>Vista actual</small>
+              <strong>{visibleScopeLabel}</strong>
+            </Link>
+          )}
         </header>
         <div className="content-enter">{children}</div>
         <footer>

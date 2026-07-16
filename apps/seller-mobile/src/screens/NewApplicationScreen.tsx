@@ -1,6 +1,8 @@
+import * as Contacts from "expo-contacts";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { automaticFinancingValues } from "../applicationDefaults";
 import {
   ChoiceGroup,
   ErrorBanner,
@@ -19,6 +22,7 @@ import {
   SectionCard,
   SuccessBanner,
 } from "../components/ui";
+import { referenceAutofillFromContact } from "../contactAutofill";
 import {
   createApplication,
   loadApplicationOptions,
@@ -43,6 +47,9 @@ const documentLabels: Readonly<Record<DocumentType, string>> = {
   selfie: "Selfie del cliente",
   address_proof: "Comprobante de domicilio",
 };
+
+const identityDocumentTypes = ["dni_front", "dni_back"] as const;
+const supportingDocumentTypes = ["selfie", "address_proof"] as const;
 
 const maritalChoices = [
   { value: "single", label: "Soltero(a)" },
@@ -139,6 +146,60 @@ export function NewApplicationScreen({ userId }: { readonly userId: string }) {
     setDocuments((current) => ({ ...current, [documentType]: asset }));
   };
 
+  const pickReference = async (reference: "one" | "two") => {
+    setError(null);
+    try {
+      if (!(await Contacts.isAvailableAsync())) {
+        setError(
+          "Los contactos no están disponibles en este dispositivo. Puedes completar la referencia manualmente.",
+        );
+        return;
+      }
+      if (Platform.OS === "android") {
+        const permission = await Contacts.requestPermissionsAsync();
+        if (!permission.granted) {
+          setError(
+            "No se autorizó el acceso a contactos. Puedes completar la referencia manualmente.",
+          );
+          return;
+        }
+      }
+
+      const contact = await Contacts.presentContactPickerAsync();
+      if (!contact) return;
+      const selected = referenceAutofillFromContact(contact);
+      if (!selected) {
+        setError(
+          "Ese contacto no tiene nombre ni teléfono. Completa la referencia manualmente.",
+        );
+        return;
+      }
+
+      setForm((current) =>
+        reference === "one"
+          ? {
+              ...current,
+              referenceOneName: selected.name || current.referenceOneName,
+              referenceOnePhone: selected.phone || current.referenceOnePhone,
+            }
+          : {
+              ...current,
+              referenceTwoName: selected.name || current.referenceTwoName,
+              referenceTwoPhone: selected.phone || current.referenceTwoPhone,
+            },
+      );
+      if (!selected.name || !selected.phone) {
+        setError(
+          "Se cargaron los datos disponibles del contacto. Completa los campos faltantes y la relación manualmente.",
+        );
+      }
+    } catch {
+      setError(
+        "No fue posible abrir los contactos. Puedes completar la referencia manualmente.",
+      );
+    }
+  };
+
   const submit = async () => {
     const validation = applicationSchema.safeParse(form);
     if (!validation.success) {
@@ -232,96 +293,21 @@ export function NewApplicationScreen({ userId }: { readonly userId: string }) {
         </Text>
         {error && <ErrorBanner message={error} />}
         {success && <SuccessBanner message={success} />}
-        <SectionCard title="1. Tienda y dispositivo">
-          <ChoiceGroup
-            choices={options.branches.map((branch) => ({
-              value: branch.id,
-              label: branch.name,
-            }))}
-            label="Tienda"
-            onChange={(branchId) => {
-              setForm((current) => ({
-                ...current,
-                branchId,
-                inventoryUnitId: "",
-                requestedPrice: "",
-              }));
-            }}
-            value={form.branchId}
-          />
-          {availableDevices.length === 0 ? (
-            <Text style={styles.muted}>
-              No hay dispositivos disponibles en esta tienda.
-            </Text>
-          ) : (
-            <View accessibilityRole="radiogroup" style={styles.deviceList}>
-              <Text style={styles.fieldLabel}>Dispositivo disponible</Text>
-              {availableDevices.map((device) => {
-                const selected = device.id === form.inventoryUnitId;
-                return (
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    key={device.id}
-                    onPress={() =>
-                      setForm((current) => ({
-                        ...current,
-                        inventoryUnitId: device.id,
-                        requestedPrice: String(device.cashPrice),
-                      }))
-                    }
-                    style={[
-                      styles.deviceOption,
-                      selected && styles.deviceOptionSelected,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.deviceName,
-                        selected && styles.deviceTextSelected,
-                      ]}
-                    >
-                      {device.brand} {device.model} · L {device.cashPrice}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.deviceDetail,
-                        selected && styles.deviceTextSelected,
-                      ]}
-                    >
-                      IMEI {device.imei} · {device.color} {device.storage}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-          <Field
-            keyboardType="decimal-pad"
-            label="Precio financiado"
-            onChangeText={(value) => update("requestedPrice", value)}
-            value={form.requestedPrice}
-          />
-          <Field
-            keyboardType="decimal-pad"
-            label="Prima propuesta"
-            onChangeText={(value) => update("downPayment", value)}
-            value={form.downPayment}
-          />
-          <Field
-            keyboardType="number-pad"
-            label="Plazo propuesto (meses)"
-            onChangeText={(value) => update("term", value)}
-            value={form.term}
-          />
-          <Text style={styles.policyNote}>
-            {options.maximumTerm === null
-              ? "Configuración de crédito no disponible."
-              : `Máximo ${options.maximumTerm} meses · prima mínima ${options.minimumDownPaymentPercentage ?? "por validar"}%.`}
+        <SectionCard title="1. Identidad">
+          <Text style={styles.muted}>
+            Fotografía primero ambos lados de la identidad. Estas mismas
+            imágenes quedarán guardadas en la solicitud; no tendrás que
+            capturarlas otra vez al completar el expediente.
           </Text>
-        </SectionCard>
-
-        <SectionCard title="2. Identidad">
+          {identityDocumentTypes.map((documentType) => (
+            <DocumentCaptureRow
+              assetUri={documents[documentType]?.uri}
+              documentType={documentType}
+              key={documentType}
+              onCapture={() => void captureDocument(documentType)}
+            />
+          ))}
+          <Text style={styles.subsectionTitle}>Datos del cliente</Text>
           <Field
             keyboardType="number-pad"
             label="DNI"
@@ -371,7 +357,7 @@ export function NewApplicationScreen({ userId }: { readonly userId: string }) {
           />
         </SectionCard>
 
-        <SectionCard title="3. Domicilio e ingresos">
+        <SectionCard title="2. Domicilio e ingresos">
           <Field
             label="Dirección actual"
             multiline
@@ -415,72 +401,179 @@ export function NewApplicationScreen({ userId }: { readonly userId: string }) {
           />
         </SectionCard>
 
-        <SectionCard title="4. Referencias">
-          <Field
-            label="Referencia 1 · nombre"
-            onChangeText={(value) => update("referenceOneName", value)}
-            value={form.referenceOneName}
+        <SectionCard title="3. Referencias">
+          <Text style={styles.muted}>
+            Puedes elegir cada referencia desde los contactos del teléfono. El
+            nombre y el número se completan automáticamente; la relación se
+            confirma manualmente.
+          </Text>
+          <PrimaryButton
+            label="Elegir contacto para referencia 1"
+            onPress={() => void pickReference("one")}
+            secondary
           />
-          <Field
-            keyboardType="phone-pad"
-            label="Referencia 1 · teléfono"
-            onChangeText={(value) => update("referenceOnePhone", value)}
-            value={form.referenceOnePhone}
+          <View style={styles.referenceFields}>
+            <Field
+              label="Referencia 1 · nombre"
+              onChangeText={(value) => update("referenceOneName", value)}
+              value={form.referenceOneName}
+            />
+            <Field
+              keyboardType="phone-pad"
+              label="Referencia 1 · teléfono"
+              onChangeText={(value) => update("referenceOnePhone", value)}
+              value={form.referenceOnePhone}
+            />
+            <Field
+              label="Referencia 1 · relación"
+              onChangeText={(value) =>
+                update("referenceOneRelationship", value)
+              }
+              value={form.referenceOneRelationship}
+            />
+          </View>
+          <PrimaryButton
+            label="Elegir contacto para referencia 2"
+            onPress={() => void pickReference("two")}
+            secondary
           />
-          <Field
-            label="Referencia 1 · relación"
-            onChangeText={(value) => update("referenceOneRelationship", value)}
-            value={form.referenceOneRelationship}
-          />
-          <Field
-            label="Referencia 2 · nombre"
-            onChangeText={(value) => update("referenceTwoName", value)}
-            value={form.referenceTwoName}
-          />
-          <Field
-            keyboardType="phone-pad"
-            label="Referencia 2 · teléfono"
-            onChangeText={(value) => update("referenceTwoPhone", value)}
-            value={form.referenceTwoPhone}
-          />
-          <Field
-            label="Referencia 2 · relación"
-            onChangeText={(value) => update("referenceTwoRelationship", value)}
-            value={form.referenceTwoRelationship}
-          />
+          <View style={styles.referenceFields}>
+            <Field
+              label="Referencia 2 · nombre"
+              onChangeText={(value) => update("referenceTwoName", value)}
+              value={form.referenceTwoName}
+            />
+            <Field
+              keyboardType="phone-pad"
+              label="Referencia 2 · teléfono"
+              onChangeText={(value) => update("referenceTwoPhone", value)}
+              value={form.referenceTwoPhone}
+            />
+            <Field
+              label="Referencia 2 · relación"
+              onChangeText={(value) =>
+                update("referenceTwoRelationship", value)
+              }
+              value={form.referenceTwoRelationship}
+            />
+          </View>
         </SectionCard>
 
-        <SectionCard title="5. Documentos">
+        <SectionCard title="4. Documentos restantes">
           <Text style={styles.muted}>
-            Las imágenes se cargan directamente al bucket privado. Máximo 7 MB
-            por fotografía.
+            Las fotos del DNI tomadas al inicio ya forman parte del expediente.
+            Completa la selfie y el comprobante de domicilio. Máximo 7 MB por
+            fotografía.
           </Text>
-          {(Object.keys(documentLabels) as DocumentType[]).map(
-            (documentType) => (
-              <View style={styles.documentRow} key={documentType}>
-                <View style={styles.documentCopy}>
-                  <Text style={styles.fieldLabel}>
-                    {documentLabels[documentType]}
-                  </Text>
-                  <Text style={styles.documentStatus}>
-                    {documents[documentType]
-                      ? "Fotografía lista"
-                      : "Pendiente de captura"}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Capturar ${documentLabels[documentType]}`}
-                  accessibilityRole="button"
-                  onPress={() => void captureDocument(documentType)}
-                  style={styles.cameraButton}
-                >
-                  <Text style={styles.cameraButtonText}>
-                    {documents[documentType] ? "Repetir" : "Tomar foto"}
-                  </Text>
-                </Pressable>
-              </View>
-            ),
+          {supportingDocumentTypes.map((documentType) => (
+            <DocumentCaptureRow
+              assetUri={documents[documentType]?.uri}
+              documentType={documentType}
+              key={documentType}
+              onCapture={() => void captureDocument(documentType)}
+            />
+          ))}
+        </SectionCard>
+
+        <SectionCard title="5. Tienda, dispositivo y condiciones">
+          <ChoiceGroup
+            choices={options.branches.map((branch) => ({
+              value: branch.id,
+              label: branch.name,
+            }))}
+            label="Tienda"
+            onChange={(branchId) => {
+              setForm((current) => ({
+                ...current,
+                branchId,
+                inventoryUnitId: "",
+                requestedPrice: "",
+                downPayment: "",
+                term: "",
+              }));
+            }}
+            value={form.branchId}
+          />
+          {availableDevices.length === 0 ? (
+            <Text style={styles.muted}>
+              No hay dispositivos disponibles en esta tienda.
+            </Text>
+          ) : (
+            <View accessibilityRole="radiogroup" style={styles.deviceList}>
+              <Text style={styles.fieldLabel}>Dispositivo disponible</Text>
+              {availableDevices.map((device) => {
+                const selected = device.id === form.inventoryUnitId;
+                return (
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    key={device.id}
+                    onPress={() => {
+                      const financing = automaticFinancingValues(
+                        device.cashPrice,
+                        options.minimumDownPaymentPercentage,
+                        options.maximumTerm,
+                      );
+                      setForm((current) => ({
+                        ...current,
+                        inventoryUnitId: device.id,
+                        ...financing,
+                      }));
+                    }}
+                    style={[
+                      styles.deviceOption,
+                      selected && styles.deviceOptionSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.deviceName,
+                        selected && styles.deviceTextSelected,
+                      ]}
+                    >
+                      {device.brand} {device.model} · L {device.cashPrice}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.deviceDetail,
+                        selected && styles.deviceTextSelected,
+                      ]}
+                    >
+                      IMEI {device.imei} · {device.color} {device.storage}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
+          <Text style={styles.autoFillNote}>
+            Al elegir un dispositivo se completan automáticamente el precio, la
+            prima mínima vigente y el plazo configurado.
+          </Text>
+          <Field
+            editable={false}
+            keyboardType="decimal-pad"
+            label="Precio financiado (automático)"
+            onChangeText={(value) => update("requestedPrice", value)}
+            value={form.requestedPrice}
+          />
+          <Field
+            keyboardType="decimal-pad"
+            label="Prima propuesta"
+            onChangeText={(value) => update("downPayment", value)}
+            value={form.downPayment}
+          />
+          <Field
+            keyboardType="number-pad"
+            label="Plazo propuesto (meses)"
+            onChangeText={(value) => update("term", value)}
+            value={form.term}
+          />
+          <Text style={styles.policyNote}>
+            {options.maximumTerm === null
+              ? "Configuración de crédito no disponible."
+              : `Máximo ${options.maximumTerm} meses · prima mínima ${options.minimumDownPaymentPercentage ?? "por validar"}%.`}
+          </Text>
         </SectionCard>
 
         <SectionCard title="6. Consentimientos">
@@ -513,6 +606,45 @@ export function NewApplicationScreen({ userId }: { readonly userId: string }) {
         />
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function DocumentCaptureRow({
+  documentType,
+  assetUri,
+  onCapture,
+}: {
+  readonly documentType: DocumentType;
+  readonly assetUri?: string;
+  readonly onCapture: () => void;
+}) {
+  return (
+    <View style={styles.documentRow}>
+      {assetUri ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={`Vista previa de ${documentLabels[documentType]}`}
+          source={{ uri: assetUri }}
+          style={styles.documentPreview}
+        />
+      ) : null}
+      <View style={styles.documentCopy}>
+        <Text style={styles.fieldLabel}>{documentLabels[documentType]}</Text>
+        <Text style={styles.documentStatus}>
+          {assetUri ? "Fotografía lista" : "Pendiente de captura"}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityLabel={`Capturar ${documentLabels[documentType]}`}
+        accessibilityRole="button"
+        onPress={onCapture}
+        style={styles.cameraButton}
+      >
+        <Text style={styles.cameraButtonText}>
+          {assetUri ? "Repetir" : "Tomar foto"}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -551,6 +683,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   fieldLabel: { color: colors.ink, fontSize: 13, fontWeight: "700" },
+  subsectionTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 12,
+    marginTop: 12,
+  },
   deviceList: { gap: 8, marginBottom: 16 },
   deviceOption: {
     borderColor: colors.line,
@@ -577,6 +716,7 @@ const styles = StyleSheet.create({
   },
   documentCopy: { flex: 1 },
   documentStatus: { color: colors.muted, fontSize: 12, marginTop: 4 },
+  documentPreview: { borderRadius: 8, height: 52, width: 52 },
   cameraButton: {
     alignItems: "center",
     backgroundColor: "#e7f4ef",
@@ -586,6 +726,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   cameraButtonText: { color: colors.brand, fontSize: 13, fontWeight: "800" },
+  referenceFields: { marginTop: 14 },
   consentRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -611,5 +752,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 4,
     padding: 10,
+  },
+  autoFillNote: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
   },
 });
