@@ -1,3 +1,63 @@
 import { AppShell } from "@/components/app-shell";
 import { createServerSupabase } from "@/lib/supabase/server";
-export default async function Dashboard(){const supabase=await createServerSupabase();const {data}=await supabase.rpc("dashboard_metrics");const values=(data??{}) as Record<string,number>;const metrics=[["Solicitudes por revisar",values.pending_applications??0],["Equipos disponibles",values.available_inventory??0],["Traslados en tránsito",values.transfers_in_transit??0],["Pagos por validar",values.payments_pending??0]] as const;return <AppShell><div className="welcome"><div><span className="eyebrow">Resumen de hoy</span><h2>Todo tu negocio, en un solo lugar</h2><p>Supervisa solicitudes, dispositivos y pagos en tiempo real.</p></div><div className="pulse-dot">En línea</div></div><div className="grid">{metrics.map(([label,value],index)=><article className="card metric-card" style={{animationDelay:`${index*80}ms`}} key={label}><div className="muted">{label}</div><div className="metric">{value}</div><div className="metric-line"/></article>)}</div><section className="section card"><div className="toolbar"><div><h2>Actividad operativa</h2><p className="muted">Los movimientos recientes de tu equipo aparecerán aquí.</p></div></div><div className="empty"><div className="empty-icon">✓</div><strong>Operación al día</strong><span>No hay acciones pendientes en este momento.</span></div></section></AppShell>}
+export default async function Dashboard({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ denied?: string }>;
+}) {
+  const query = await searchParams;
+  const supabase = await createServerSupabase();
+  const { data } = await supabase.rpc("dashboard_metrics");
+  const values = (data ?? {}) as Record<string, number>;
+  const metrics = [
+    ["Solicitudes por revisar", values.pending_applications ?? 0],
+    ["Equipos disponibles", values.available_inventory ?? 0],
+    ["Traslados en tránsito", values.transfers_in_transit ?? 0],
+    ["Pagos por validar", values.payments_pending ?? 0],
+  ] as const;
+  return (
+    <AppShell>
+      {query.denied && (
+        <div className="error" role="alert">
+          Tu rol no tiene acceso a esa sección.
+        </div>
+      )}
+      <div className="welcome">
+        <div>
+          <span className="eyebrow">Resumen de hoy</span>
+          <h2>Todo tu negocio, en un solo lugar</h2>
+          <p>Supervisa solicitudes, dispositivos y pagos en tiempo real.</p>
+        </div>
+        <div className="pulse-dot">En línea</div>
+      </div>
+      <div className="grid">
+        {metrics.map(([label, value], index) => (
+          <article
+            className="card metric-card"
+            style={{ animationDelay: `${index * 80}ms` }}
+            key={label}
+          >
+            <div className="muted">{label}</div>
+            <div className="metric">{value}</div>
+            <div className="metric-line" />
+          </article>
+        ))}
+      </div>
+      <section className="section card">
+        <div className="toolbar">
+          <div>
+            <h2>Actividad operativa</h2>
+            <p className="muted">
+              Los movimientos recientes de tu equipo aparecerán aquí.
+            </p>
+          </div>
+        </div>
+        <div className="empty">
+          <div className="empty-icon">✓</div>
+          <strong>Operación al día</strong>
+          <span>No hay acciones pendientes en este momento.</span>
+        </div>
+      </section>
+    </AppShell>
+  );
+}

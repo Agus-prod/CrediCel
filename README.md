@@ -25,8 +25,8 @@ Copie también las variables públicas a `apps/admin-web/.env.local` y `apps/cus
 
 ## Aplicaciones
 
-- `apps/admin-web`: operaciones administrativas en Next.js, puerto 3000.
-- `apps/customer-portal`: autoservicio del cliente, puerto 3001.
+- `apps/admin-web`: operaciones administrativas en Next.js, puerto 3001.
+- `apps/customer-portal`: autoservicio del cliente, puerto 3002.
 - `apps/seller-mobile`: Expo/React Native para iOS y Android.
 - `apps/device-controller`: contrato reservado para CrediCel Protect en Kotlin.
 
@@ -55,5 +55,6 @@ Las migraciones viven en `supabase/migrations`, el seed únicamente local en `su
 ## Documentación
 
 - [Arquitectura](docs/ARCHITECTURE.md)
+- [Pruebas y configuración móvil](docs/MOBILE.md)
 - [Decisiones pendientes](docs/PENDING_DECISIONS.md)
 - [Riesgos técnicos](docs/TECHNICAL_RISKS.md)

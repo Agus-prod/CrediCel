@@ -1,5 +1,5 @@
 begin;
-select plan(48);
+select plan(50);
 select has_table('public','organizations','organizations exists');
 select has_table('public','business_units','business_units exists');
 select has_table('public','branches','branches exists');
@@ -24,13 +24,15 @@ select has_function('public','dispatch_inventory_transfer',array['uuid','text[]'
 select has_function('public','receive_inventory_transfer',array['uuid','text[]'],'receive is transactional RPC');
 select has_function('public','submit_credit_application',array['uuid','uuid','text','text','text','text','text','numeric','numeric','integer'],'credit submission is transactional');
 select has_function('public','decide_credit_application',array['uuid','text','text','jsonb'],'credit decision is transactional');
-select has_function('public','create_inventory_transfer',array['uuid','uuid','uuid[]'],'transfer creation is transactional');
+select has_function('public','create_inventory_transfer',array['uuid','uuid','uuid[]','boolean','uuid'],'transfer creation is transactional');
+select has_function('public','approve_inventory_transfer',array['uuid'],'transfer approval is explicit');
 select has_function('public','report_customer_payment',array['uuid','uuid','uuid','text','numeric','date','text','text'],'portal payment reporting exists');
 select has_function('public','validate_customer_payment',array['uuid','boolean','text'],'payment validation exists');
 select has_function('public','record_collection_action',array['uuid','text','text','date'],'collections workflow exists');
 select has_function('public','formalize_credit',array['uuid','text','text','text'],'formalization is transactional');
 select has_function('public','record_cash_installment',array['uuid','numeric','text','text'],'cash payment application exists');
-select has_function('public','create_branch',array['text','text','text','text'],'branch creation is controlled');
+select has_function('public','create_branch',array['uuid','text','text','text','text'],'branch creation is controlled');
+select has_function('public','create_business_unit',array['text','text','text','text'],'business unit creation is controlled');
 select has_function('public','create_team_invitation',array['text','text','text','uuid'],'team invitation exists');
 select has_function('public','register_inventory_device',array['uuid','text','text','text','text','text','text','text','text','numeric','numeric','boolean'],'inventory registration exists');
 select has_function('public','refresh_credit_assessment',array['uuid'],'explainable assessment exists');

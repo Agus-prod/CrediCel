@@ -4,22 +4,22 @@ Todos los usuarios internos usan la contraseña `CrediCel2026!`.
 
 ## Organización CrediCel Centro
 
-| Experiencia | Usuario | Alcance |
-|---|---|---|
-| Gerente de tienda | `gerente.tgu@credicel.hn` | Centro Tegucigalpa |
-| Vendedor | `vendedor.tgu@credicel.hn` | Su cartera y Centro Tegucigalpa |
-| Analista de crédito | `analista.tgu@credicel.hn` | Solicitudes de Centro Tegucigalpa |
-| Caja | `caja.tgu@credicel.hn` | Pagos de Centro Tegucigalpa |
-| Inventario | `inventario.tgu@credicel.hn` | Dispositivos y traslados de Centro Tegucigalpa |
-| Gerente de tienda | `gerente.comayaguela@credicel.hn` | Comayagüela |
-| Vendedor | `vendedor.comayaguela@credicel.hn` | Su cartera y Comayagüela |
-| Analista de crédito | `analista.comayaguela@credicel.hn` | Solicitudes de Comayagüela |
-| Cobranza | `cobranza@credicel.hn` | Cartera en mora de la organización |
+| Experiencia         | Usuario                            | Alcance                                        |
+| ------------------- | ---------------------------------- | ---------------------------------------------- |
+| Gerente de tienda   | `gerente.tgu@credicel.hn`          | Centro Tegucigalpa                             |
+| Vendedor            | `vendedor.tgu@credicel.hn`         | Su cartera y Centro Tegucigalpa                |
+| Analista de crédito | `analista.tgu@credicel.hn`         | Solicitudes de Centro Tegucigalpa              |
+| Caja                | `caja.tgu@credicel.hn`             | Pagos de Centro Tegucigalpa                    |
+| Inventario          | `inventario.tgu@credicel.hn`       | Dispositivos y traslados de Centro Tegucigalpa |
+| Gerente de tienda   | `gerente.comayaguela@credicel.hn`  | Comayagüela                                    |
+| Vendedor            | `vendedor.comayaguela@credicel.hn` | Su cartera y Comayagüela                       |
+| Analista de crédito | `analista.comayaguela@credicel.hn` | Solicitudes de Comayagüela                     |
+| Cobranza            | `cobranza@credicel.hn`             | Cartera en mora de la organización             |
 
 ## Organización independiente de prueba
 
-| Experiencia | Usuario | Alcance |
-|---|---|---|
+| Experiencia | Usuario                        | Alcance                                          |
+| ----------- | ------------------------------ | ------------------------------------------------ |
 | Propietario | `propietario.demo@credicel.hn` | Demo Comercial del Norte / Tienda San Pedro Sula |
 
 Este propietario inicia con una prueba gratuita de 14 días y puede abrir los módulos de reportes, tiendas, equipo, configuración y suscripción. No puede consultar información de CrediCel Centro.
@@ -28,7 +28,7 @@ Este propietario inicia con una prueba gratuita de 14 días y puede abrir los m�
 
 - Cliente: Lucía Gómez
 - Estado: crédito en mora
-- Dirección: `http://localhost:3002/?token=11111111-1111-1111-1111-111111111111`
+- El enlace se emite desde el expediente del cliente con **Generar acceso al portal**. No se conserva un token conocido en el repositorio.
 - El portal permite reportar una transferencia con comprobante; Caja puede aprobarla o rechazarla.
 
 ## Casos cargados

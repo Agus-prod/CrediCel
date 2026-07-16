@@ -1,1 +1,24 @@
-{"expo":{"name":"CrediCel Vendedores","slug":"credicel-seller","version":"0.1.0","orientation":"portrait","ios":{"supportsTablet":true,"bundleIdentifier":"com.credicel.seller"},"android":{"package":"com.credicel.seller"}}}
+{
+  "expo": {
+    "name": "CrediCel Vendedores",
+    "slug": "credicel-seller",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.credicel.seller"
+    },
+    "android": {
+      "package": "com.credicel.seller"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "CrediCel usa la cámara para capturar el expediente autorizado por el cliente.",
+          "photosPermission": "CrediCel puede acceder a fotografías elegidas para completar un expediente."
+        }
+      ]
+    ]
+  }
+}

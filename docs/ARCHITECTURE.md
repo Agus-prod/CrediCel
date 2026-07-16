@@ -44,3 +44,9 @@ organizations
 ## Flujos transaccionales
 
 Despacho bloquea la transferencia, valida todos los IMEI y estados, marca cada unidad `in_transit` y escribe eventos/movimientos en una sola transacción. Recepción aplica el mismo bloqueo; un IMEI distinto genera discrepancia y no mueve el equipo. Una recepción válida cambia ubicación y, con permiso adicional, propietario.
+
+## Configuración versionada
+
+Cada organización conserva una versión publicada y un borrador editable. Los valores del borrador comparten vigencia, se validan con Zod y PostgreSQL, y únicamente las RPC de configuración pueden guardarlos o publicarlos. Publicar retira la versión anterior, activa la nueva de forma transaccional, registra auditoría y crea el siguiente borrador. Las solicitudes nuevas guardan `configuration_version_id` como evidencia de la política aplicada.
+
+El RPC SQL utilizado por el formulario transaccional resuelve la política organizacional publicada. El servicio tipado de `packages/configuration-engine` resuelve organización, unidad propietaria, punto, tipo de cliente, categoría, marca, modelo, rango de precio, producto y campaña con contexto compuesto, precedencia canónica y rechazo de ambigüedades. La interfaz administrativa de esta fase publica la base organizacional; los ámbitos especializados se habilitarán en esa interfaz de forma progresiva sin cambiar el contrato del motor.

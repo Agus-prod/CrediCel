@@ -1,1 +1,9 @@
-import{requireAnyRole}from"@/lib/authz";export default async function SalesLayout({children}:{readonly children:React.ReactNode}){await requireAnyRole(["salesperson","branch_manager"]);return children}
+import { requireAnyRole } from "@/lib/authz";
+export default async function SalesLayout({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}) {
+  await requireAnyRole(["salesperson", "branch_manager"]);
+  return children;
+}

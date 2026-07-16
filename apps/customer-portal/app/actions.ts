@@ -1,2 +1,48 @@
-"use server";import{redirect}from"next/navigation";import{createPortalSupabase}from"../lib/supabase";
-export async function reportPayment(formData:FormData){const token=String(formData.get("token")??"");const supabase=createPortalSupabase();const{data,error}=await supabase.rpc("report_customer_payment",{p_token:token,p_account_id:String(formData.get("account_id")??""),p_bank_account_id:String(formData.get("bank_account_id")??""),p_origin_bank:String(formData.get("origin_bank")??""),p_amount:Number(formData.get("amount")??0),p_date:String(formData.get("date")??""),p_reference:String(formData.get("reference")??""),p_holder:String(formData.get("holder")??"")});if(error)redirect(`/?token=${token}&error=${encodeURIComponent(error.message)}`);const receipt=formData.get("receipt");if(receipt instanceof File&&receipt.size>0){const safe=receipt.name.replace(/[^a-zA-Z0-9._-]/g,"_");const path=`${token}/${data}/${Date.now()}-${safe}`;const upload=await supabase.storage.from("transfer-receipts").upload(path,receipt,{contentType:receipt.type,upsert:false});if(upload.error)redirect(`/?token=${token}&error=${encodeURIComponent("El pago fue reportado, pero el comprobante no pudo cargarse")}`);const attached=await supabase.rpc("attach_customer_receipt",{p_token:token,p_report_id:data,p_storage_path:path});if(attached.error)redirect(`/?token=${token}&error=${encodeURIComponent(attached.error.message)}`)}redirect(`/?token=${token}&reported=1`)}
+"use server";
+import { redirect } from "next/navigation";
+import { createPortalSupabase } from "../lib/supabase";
+import { validateReceipt } from "../lib/uploads";
+export async function reportPayment(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const receipt = formData.get("receipt");
+  const receiptError = validateReceipt(receipt);
+  if (receiptError) {
+    redirect(
+      `/?token=${encodeURIComponent(token)}&error=${encodeURIComponent(receiptError)}`,
+    );
+  }
+  const supabase = createPortalSupabase();
+  const { data, error } = await supabase.rpc("report_customer_payment", {
+    p_token: token,
+    p_account_id: String(formData.get("account_id") ?? ""),
+    p_bank_account_id: String(formData.get("bank_account_id") ?? ""),
+    p_origin_bank: String(formData.get("origin_bank") ?? ""),
+    p_amount: Number(formData.get("amount") ?? 0),
+    p_date: String(formData.get("date") ?? ""),
+    p_reference: String(formData.get("reference") ?? ""),
+    p_holder: String(formData.get("holder") ?? ""),
+  });
+  if (error)
+    redirect(`/?token=${token}&error=${encodeURIComponent(error.message)}`);
+  if (receipt instanceof File && receipt.size > 0) {
+    const safe = receipt.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${token}/${data}/${Date.now()}-${safe}`;
+    const upload = await supabase.storage
+      .from("transfer-receipts")
+      .upload(path, receipt, { contentType: receipt.type, upsert: false });
+    if (upload.error)
+      redirect(
+        `/?token=${token}&error=${encodeURIComponent("El pago fue reportado, pero el comprobante no pudo cargarse")}`,
+      );
+    const attached = await supabase.rpc("attach_customer_receipt", {
+      p_token: token,
+      p_report_id: data,
+      p_storage_path: path,
+    });
+    if (attached.error)
+      redirect(
+        `/?token=${token}&error=${encodeURIComponent(attached.error.message)}`,
+      );
+  }
+  redirect(`/?token=${token}&reported=1`);
+}

@@ -1,1 +1,14 @@
-import type{MetadataRoute}from"next";export default function manifest():MetadataRoute.Manifest{return{name:"Mi CrediCel",short_name:"Mi CrediCel",description:"Consulta tus cuotas y reporta pagos.",start_url:"/",display:"standalone",background_color:"#f4f8f6",theme_color:"#087653",orientation:"any",lang:"es-HN"}}
+import type { MetadataRoute } from "next";
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: "Mi CrediCel",
+    short_name: "Mi CrediCel",
+    description: "Consulta tus cuotas y reporta pagos.",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#f4f8f6",
+    theme_color: "#087653",
+    orientation: "any",
+    lang: "es-HN",
+  };
+}
