@@ -64,6 +64,7 @@ export async function middleware(request: NextRequest) {
     "/nueva-contrasena",
     "/aceptar-invitacion",
     "/documentos-demo",
+    "/auth/callback",
   ].some((path) => request.nextUrl.pathname.startsWith(path));
   if (!user && !publicPath) {
     const target = request.nextUrl.clone();

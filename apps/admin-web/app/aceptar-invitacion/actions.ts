@@ -11,8 +11,9 @@ export async function acceptInvitation(formData: FormData) {
   if (!user) {
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
+    const invitationPath = `/aceptar-invitacion?token=${encodeURIComponent(token)}`;
     const callbackUrl = await getPublicAppUrl(
-      `/aceptar-invitacion?token=${encodeURIComponent(token)}`,
+      `/auth/callback?next=${encodeURIComponent(invitationPath)}`,
     );
     const { data, error } = await s.auth.signUp({
       email,

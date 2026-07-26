@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { getPublicAppUrl } from "@/lib/public-url.server";
 export async function requestReset(formData: FormData) {
   const supabase = await createServerSupabase();
-  const callbackUrl = await getPublicAppUrl("/nueva-contrasena");
+  const callbackUrl = await getPublicAppUrl(
+    "/auth/callback?next=/nueva-contrasena",
+  );
   await supabase.auth.resetPasswordForEmail(
     String(formData.get("email") ?? ""),
     { redirectTo: callbackUrl },
