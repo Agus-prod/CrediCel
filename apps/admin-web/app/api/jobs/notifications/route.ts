@@ -1,0 +1,6 @@
+import { NextResponse } from "next/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { deliverNotification } from "@/lib/notifications";
+export const runtime="nodejs";
+const authorized=(request:Request)=>{const secret=process.env.CRON_SECRET;return Boolean(secret&&request.headers.get("authorization")===`Bearer ${secret}`)};
+export async function POST(request:Request){if(!authorized(request))return NextResponse.json({error:"No autorizado"},{status:401});const supabase=createAdminSupabase();const{data,error}=await supabase.rpc("claim_document_deliveries",{p_limit:20});if(error)return NextResponse.json({error:"No fue posible reclamar entregas"},{status:500});let sent=0,failed=0;for(const delivery of data??[]){try{const providerId=await deliverNotification(delivery);await supabase.rpc("complete_document_delivery",{p_id:delivery.id,p_success:true,p_provider_message_id:providerId,p_error:null});sent++}catch(cause){await supabase.rpc("complete_document_delivery",{p_id:delivery.id,p_success:false,p_provider_message_id:null,p_error:cause instanceof Error?cause.message:"Error desconocido"});failed++}}return NextResponse.json({processed:(data??[]).length,sent,failed})}

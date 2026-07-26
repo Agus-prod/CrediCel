@@ -1,0 +1,36 @@
+name: E2E producción
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      E2E_BASE_URL: https://credi-cel-admin-web.vercel.app
+      E2E_PLATFORM_EMAIL: ${{ secrets.E2E_PLATFORM_EMAIL }}
+      E2E_PLATFORM_PASSWORD: ${{ secrets.E2E_PLATFORM_PASSWORD }}
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_MANAGER_EMAIL: ${{ secrets.E2E_MANAGER_EMAIL }}
+      E2E_MANAGER_PASSWORD: ${{ secrets.E2E_MANAGER_PASSWORD }}
+      E2E_ANALYST_EMAIL: ${{ secrets.E2E_ANALYST_EMAIL }}
+      E2E_ANALYST_PASSWORD: ${{ secrets.E2E_ANALYST_PASSWORD }}
+      E2E_SELLER_EMAIL: ${{ secrets.E2E_SELLER_EMAIL }}
+      E2E_SELLER_PASSWORD: ${{ secrets.E2E_SELLER_PASSWORD }}
+      E2E_CASHIER_EMAIL: ${{ secrets.E2E_CASHIER_EMAIL }}
+      E2E_CASHIER_PASSWORD: ${{ secrets.E2E_CASHIER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.9.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: e2e-report, path: playwright-report, retention-days: 14 }

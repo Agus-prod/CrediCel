@@ -65,6 +65,9 @@ export async function middleware(request: NextRequest) {
     "/nueva-contrasena",
     "/aceptar-invitacion",
     "/documentos-demo",
+    "/verificar-documento",
+    "/api/health",
+    "/api/jobs/notifications",
     "/auth/callback",
   ].some((path) => request.nextUrl.pathname.startsWith(path));
   if (!user && !publicPath) {

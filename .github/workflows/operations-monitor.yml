@@ -1,0 +1,19 @@
+name: Monitoreo y notificaciones
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+permissions:
+  contents: read
+jobs:
+  operate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar salud
+        run: curl --fail --retry 2 --max-time 20 https://credi-cel-admin-web.vercel.app/api/health
+      - name: Procesar notificaciones
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$CRON_SECRET"
+          curl --fail --retry 2 --max-time 60 -X POST -H "Authorization: Bearer $CRON_SECRET" https://credi-cel-admin-web.vercel.app/api/jobs/notifications

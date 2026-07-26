@@ -1,0 +1,38 @@
+name: Respaldo cifrado
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 7 * * *"
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Exportar base de datos
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          test -n "$SUPABASE_DB_URL"
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --data-only --use-copy
+      - name: Exportar archivos privados
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-supabase-storage.mjs
+      - name: Empaquetar respaldo completo
+        run: tar -czf credicel-backup.tar.gz roles.sql schema.sql data.sql storage
+      - name: Cifrar respaldo
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in credicel-backup.tar.gz -out credicel-backup.tar.gz.enc -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+          rm -rf credicel-backup.tar.gz roles.sql schema.sql data.sql storage
+      - uses: actions/upload-artifact@v4
+        with: { name: "credicel-db-${{ github.run_id }}", path: credicel-backup.tar.gz.enc, retention-days: 30, if-no-files-found: error }

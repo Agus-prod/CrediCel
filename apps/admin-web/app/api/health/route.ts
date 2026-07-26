@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+export const dynamic="force-dynamic";
+export async function GET(){const started=Date.now();const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;if(!url||!key)return NextResponse.json({status:"degraded",database:"unconfigured"},{status:503});const client=createClient(url,key,{auth:{persistSession:false}});const{error}=await client.from("subscription_plans").select("id",{head:true,count:"exact"}).limit(1);const healthy=!error;return NextResponse.json({status:healthy?"ok":"degraded",database:healthy?"reachable":"unreachable",latency_ms:Date.now()-started,timestamp:new Date().toISOString()},{status:healthy?200:503,headers:{"Cache-Control":"no-store"}})}
