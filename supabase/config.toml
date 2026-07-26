@@ -13,6 +13,24 @@ major_version = 15
 enabled = true
 port = 54323
 
+[auth]
+enabled = true
+site_url = "https://credi-cel-admin-web.vercel.app"
+additional_redirect_urls = ["https://credi-cel-admin-web.vercel.app/**"]
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1m"
+otp_length = 8
+otp_expiry = 3600
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
 [auth.email.template.confirmation]
 subject = "Confirma tu cuenta de CrediCel"
 content_path = "./supabase/templates/confirmation.html"
@@ -39,4 +57,4 @@ content_path = "./supabase/templates/reauthentication.html"
 
 [storage]
 enabled = true
-file_size_limit = "20MiB"
+file_size_limit = "50MiB"
