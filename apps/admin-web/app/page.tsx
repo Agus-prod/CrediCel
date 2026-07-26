@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 export default async function Dashboard({
   searchParams,
 }: {
@@ -7,6 +8,8 @@ export default async function Dashboard({
 }) {
   const query = await searchParams;
   const supabase = await createServerSupabase();
+  const { data: isPlatformOperator } = await supabase.rpc("is_platform_operator");
+  if (isPlatformOperator) redirect("/operacion");
   const { data } = await supabase.rpc("dashboard_metrics");
   const values = (data ?? {}) as Record<string, number>;
   const metrics = [

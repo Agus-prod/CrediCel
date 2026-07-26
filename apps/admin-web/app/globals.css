@@ -2788,3 +2788,13 @@ html{max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-ad
 @media(max-width:390px){.legal-document-menu,.friendly-fields>div{grid-template-columns:1fr}.legal-editor-actions{grid-template-columns:1fr}}
 .platform-register-card{width:min(620px,calc(100% - 28px))}.platform-register-card h1{margin:12px 0 6px}.platform-register-card .form{margin-top:20px}.auth-back{display:block;margin-top:18px;color:#076f50;text-align:center;font-weight:750;text-decoration:none}
 .platform-confirmation{display:grid;gap:14px;margin-top:18px}.platform-confirmation form,.platform-confirmation .button{width:100%}
+.platform-shell{min-height:100dvh;background:linear-gradient(145deg,#edf7f2,#f8faf9)}
+.platform-nav{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:28px;min-height:72px;padding:12px clamp(18px,4vw,56px);border-bottom:1px solid #d7e5de;background:rgba(255,255,255,.94);backdrop-filter:blur(14px)}
+.platform-nav .logo{margin-right:auto;color:var(--ink);font-size:1.45rem;text-decoration:none}
+.platform-nav nav{display:flex;align-items:center;gap:8px}
+.platform-nav nav a{padding:10px 13px;border-radius:10px;color:#365c50;font-size:.86rem;font-weight:750;text-decoration:none}
+.platform-nav nav a:hover{background:#e5f3ed;color:#076d4e}
+.platform-nav form{margin:0}
+.platform-shell .platform-console{min-height:calc(100dvh - 72px)}
+.platform-shell .operations-page{max-width:1200px;margin:auto}
+@media(max-width:620px){.platform-nav{display:grid;grid-template-columns:1fr auto;gap:8px 12px;padding:10px 14px}.platform-nav nav{grid-column:1/-1;grid-row:2;overflow-x:auto}.platform-nav nav a{white-space:nowrap}.platform-nav .button{padding:9px 11px}.platform-shell .platform-console{min-height:calc(100dvh - 108px)}}

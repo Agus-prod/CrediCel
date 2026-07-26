@@ -77,8 +77,25 @@ export async function middleware(request: NextRequest) {
     target.pathname = "/";
     return NextResponse.redirect(target);
   }
+  const platformOperationsPath =
+    request.nextUrl.pathname === "/operacion" ||
+    request.nextUrl.pathname.startsWith("/operacion/");
+  if (user && !publicPath) {
+    const { data: isPlatformOperator } = await supabase.rpc("is_platform_operator");
+    if (isPlatformOperator && !platformOperationsPath) {
+      const target = request.nextUrl.clone();
+      target.pathname = "/operacion";
+      target.search = "";
+      return NextResponse.redirect(target);
+    }
+    if (!isPlatformOperator && platformOperationsPath) {
+      const target = request.nextUrl.clone();
+      target.pathname = "/";
+      target.search = "?denied=1";
+      return NextResponse.redirect(target);
+    }
+  }
   const subscriptionPath = request.nextUrl.pathname.startsWith("/suscripcion");
-  const platformOperationsPath = request.nextUrl.pathname.startsWith("/operacion/");
   if (user && !publicPath && !subscriptionPath && !platformOperationsPath) {
     const { data: summary } = await supabase.rpc("subscription_summary");
     const subscription = summary && typeof summary === "object" && !Array.isArray(summary)
