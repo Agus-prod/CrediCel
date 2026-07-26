@@ -5,9 +5,9 @@ select plan(17);
 select has_table('public','platform_bank_accounts','platform bank accounts exist');
 select has_table('public','subscription_payment_requests','subscription transfer requests exist');
 select is((select (limits->>'customers')::integer from public.subscription_plans where code='trial'),50,'trial is capped at 50 customers');
-select is((select monthly_price from public.subscription_plans where code='small'),1499::numeric,'small monthly price is configured');
-select is((select monthly_price from public.subscription_plans where code='medium'),3499::numeric,'medium monthly price is configured');
-select is((select monthly_price from public.subscription_plans where code='large'),7999::numeric,'large monthly price is configured');
+select is((select monthly_price from public.subscription_plans where code='small'),1999::numeric,'small monthly price is configured');
+select is((select monthly_price from public.subscription_plans where code='medium'),4999::numeric,'medium monthly price is configured');
+select is((select monthly_price from public.subscription_plans where code='large'),12999::numeric,'large monthly price is configured');
 
 insert into auth.users(id,email) values
   ('98000000-0000-4000-8000-000000000001','owner-a@subscription.test'),
