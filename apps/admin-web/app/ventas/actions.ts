@@ -9,6 +9,10 @@ import {
 } from "@/lib/uploads";
 const text = (f: FormData, n: string) => String(f.get(n) ?? "");
 const number = (f: FormData, n: string) => Number(f.get(n) ?? 0);
+function normalizedBirthDate(value: string) {
+  const local = value.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  return local ? `${local[3]}-${local[2]}-${local[1]}` : value;
+}
 const requiredDocuments = [
   "dni_front",
   "dni_back",
@@ -207,7 +211,7 @@ export async function submitCreditApplication(formData: FormData) {
       p_requested_price: requestedPrice,
       p_down_payment: number(formData, "down_payment"),
       p_term: number(formData, "term"),
-      p_birth_date: text(formData, "birth_date"),
+      p_birth_date: normalizedBirthDate(text(formData, "birth_date")),
       p_marital_status: text(formData, "marital_status"),
       p_dependents: number(formData, "dependents"),
       p_current_address: text(formData, "current_address"),
@@ -257,10 +261,16 @@ export async function submitCreditApplication(formData: FormData) {
       const { error: documentError } = await supabase
         .from("customer_documents")
         .insert({
+          application_id: String(data),
           organization_id: application.organization_id,
           customer_id: application.customer_id,
           document_type: documentType,
           storage_path: path,
+          metadata: {
+            application_id: String(data),
+            identity_sex: text(formData, "sex") || null,
+            uploaded_from: "credit_application",
+          },
         });
       if (documentError) {
         redirect(

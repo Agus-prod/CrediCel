@@ -1,8 +1,18 @@
 import { AppShell } from "@/components/app-shell";
+import {
+  ApplicationConversation,
+  requestedDocumentLabels,
+  type ApplicationConversationMessage,
+} from "@/components/application-conversation";
+import { ApplicationConversationLive } from "@/components/application-conversation-live";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { actionSchema } from "@credicel/business-rules";
 import { z } from "zod";
-import { decideApplication, formalizeApplication } from "./actions";
+import {
+  decideApplication,
+  formalizeApplication,
+  sendApplicationMessage,
+} from "./actions";
 import { DocumentChecklist } from "./document-checklist";
 const labels: Readonly<Record<string, string>> = {
   submitted: "Enviada",
@@ -45,6 +55,7 @@ export default async function Applications({
     error?: string;
     updated?: string;
     formalized?: string;
+    messaged?: string;
   }>;
 }) {
   const query = await searchParams;
@@ -56,7 +67,7 @@ export default async function Applications({
     supabase
       .from("credit_applications")
       .select(
-        "id,status,requested_price,proposed_down_payment,proposed_term,customers(first_name,last_name,normalized_dni,phone,customer_documents(document_type,storage_path)),inventory_units(imei_1),branches(name),credit_application_profiles(monthly_income,monthly_expenses,employment_months,current_address,employer_name),credit_risk_assessments(score,recommendation,disposable_income,payment_to_income_ratio,factors,created_at)",
+        "id,status,requested_price,proposed_down_payment,proposed_term,customers(first_name,last_name,normalized_dni,phone,customer_documents(id,application_id,document_type,storage_path,metadata,created_at)),inventory_units(imei_1),branches(name),credit_application_profiles(monthly_income,monthly_expenses,employment_months,current_address,employer_name),credit_risk_assessments(score,recommendation,disposable_income,payment_to_income_ratio,factors,created_at)",
       )
       .order("created_at", { ascending: false })
       .limit(30),
@@ -66,14 +77,24 @@ export default async function Applications({
       .eq("profile_id", user?.id ?? ""),
   ]);
   const applicationIds = (data ?? []).map((application) => application.id);
-  const { data: executionRows } = applicationIds.length
-    ? await supabase
-        .from("rule_execution_logs")
-        .select("subject_id,result,created_at")
-        .eq("subject_type", "credit_application")
-        .in("subject_id", applicationIds)
-        .order("created_at", { ascending: false })
-    : { data: [] };
+  const [{ data: executionRows }, { data: noteRows }] = applicationIds.length
+    ? await Promise.all([
+        supabase
+          .from("rule_execution_logs")
+          .select("subject_id,result,created_at")
+          .eq("subject_type", "credit_application")
+          .in("subject_id", applicationIds)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("credit_application_notes")
+          .select(
+            "id,application_id,note,message_type,requested_document_type,attachment_document_id,author_id,author_display_name,author_role,created_at",
+          )
+          .eq("visibility", "shared")
+          .in("application_id", applicationIds)
+          .order("created_at", { ascending: true }),
+      ])
+    : [{ data: [] }, { data: [] }];
   const ruleResultByApplication = new Map<
     string,
     z.infer<typeof ruleResultSchema>
@@ -104,10 +125,55 @@ export default async function Applications({
       .filter((document) => document.signedUrl)
       .map((document) => [document.path, document.signedUrl] as const),
   );
+  const allCustomerDocuments = (data ?? []).flatMap((application) => {
+    const customer = relation(application.customers);
+    return customer?.customer_documents ?? [];
+  });
+  const documentById = new Map(
+    allCustomerDocuments.map((document) => [document.id, document] as const),
+  );
+  const messagesByApplication = new Map<
+    string,
+    ApplicationConversationMessage[]
+  >();
+  for (const note of noteRows ?? []) {
+    const document = note.attachment_document_id
+      ? documentById.get(note.attachment_document_id)
+      : null;
+    const metadataType =
+      document?.metadata &&
+      typeof document.metadata === "object" &&
+      !Array.isArray(document.metadata)
+        ? String(document.metadata.requested_document_type ?? "")
+        : "";
+    const attachmentType =
+      note.requested_document_type || metadataType || document?.document_type;
+    const messages = messagesByApplication.get(note.application_id) ?? [];
+    messages.push({
+      id: note.id,
+      authorId: note.author_id,
+      authorName: note.author_display_name || "Equipo CrediCel",
+      authorRole: note.author_role || "Equipo CrediCel",
+      createdAt: note.created_at,
+      messageType: note.message_type,
+      note: note.note,
+      requestedDocumentType: note.requested_document_type,
+      attachmentUrl: document
+        ? (signedUrlByPath.get(document.storage_path) ?? null)
+        : null,
+      attachmentName: attachmentType
+        ? (requestedDocumentLabels[attachmentType] ?? "Documento adjunto")
+        : null,
+    });
+    messagesByApplication.set(note.application_id, messages);
+  }
   const roles = new Set(
     (assigned ?? []).map((row) => relatedName(row.roles)).filter(Boolean),
   );
-  const canDecide = roles.has("credit_analyst") || roles.has("credit_manager");
+  const canDecide =
+    roles.has("credit_analyst") ||
+    roles.has("credit_manager") ||
+    roles.has("branch_manager");
   const canFormalize =
     roles.has("cashier") ||
     roles.has("branch_manager") ||
@@ -115,6 +181,7 @@ export default async function Applications({
     roles.has("organization_admin");
   return (
     <AppShell>
+      <ApplicationConversationLive />
       <section className="section">
         <div className="toolbar">
           <div>
@@ -141,6 +208,11 @@ export default async function Applications({
             generadas.
           </div>
         )}
+        {query.messaged && (
+          <div className="notice" role="status">
+            El mensaje fue enviado al vendedor.
+          </div>
+        )}
         <div className="workspace-stack">
           {(data ?? []).map((app) => {
             const customer = relation(app.customers);
@@ -151,6 +223,7 @@ export default async function Applications({
               String(b.created_at).localeCompare(String(a.created_at)),
             )[0];
             const ruleResult = ruleResultByApplication.get(app.id);
+            const conversation = messagesByApplication.get(app.id) ?? [];
             const actionable = [
               "submitted",
               "under_review",
@@ -158,7 +231,11 @@ export default async function Applications({
               "preapproved",
             ].includes(app.status);
             return (
-              <article className="card application-card" key={app.id}>
+              <article
+                className="card application-card"
+                id={`application-${app.id}`}
+                key={app.id}
+              >
                 <div className="application-head">
                   <div>
                     <span className="eyebrow">
@@ -260,13 +337,18 @@ export default async function Applications({
                   </div>
                 )}
                 <DocumentChecklist
-                  documents={(customer?.customer_documents ?? []).map(
-                    (document) => ({
+                  documents={(customer?.customer_documents ?? [])
+                    .filter(
+                      (document) =>
+                        !document.application_id ||
+                        document.application_id === app.id,
+                    )
+                    .map((document) => ({
+                      created_at: document.created_at,
                       document_type: document.document_type,
                       signed_url:
                         signedUrlByPath.get(document.storage_path) ?? null,
-                    }),
-                  )}
+                    }))}
                 />
                 <div className="decision-summary">
                   <div>
@@ -286,8 +368,19 @@ export default async function Applications({
                     <strong>{app.proposed_term} meses</strong>
                   </div>
                 </div>
+                <ApplicationConversation
+                  action={sendApplicationMessage}
+                  applicationId={app.id}
+                  canCompose={canDecide && actionable}
+                  currentUserId={user?.id ?? ""}
+                  messages={conversation}
+                  mode="analyst"
+                />
                 {actionable && canDecide && (
-                  <form action={decideApplication} className="decision-form">
+                  <form
+                    action={decideApplication}
+                    className="decision-form analyst-decision-form"
+                  >
                     <input type="hidden" name="application_id" value={app.id} />
                     <div className="field">
                       <label htmlFor={`decision-${app.id}`}>Decisión</label>
@@ -316,14 +409,48 @@ export default async function Applications({
                         </option>
                       </select>
                     </div>
+                    <div className="field">
+                      <label htmlFor={`requested-document-${app.id}`}>
+                        Documento solicitado
+                      </label>
+                      <select
+                        id={`requested-document-${app.id}`}
+                        name="requested_document_type"
+                      >
+                        <option value="">No aplica</option>
+                        {Object.entries(requestedDocumentLabels).map(
+                          ([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                    <div className="field condition-detail">
+                      <label htmlFor={`condition-detail-${app.id}`}>
+                        Monto o requisito de la condición
+                      </label>
+                      <input
+                        id={`condition-detail-${app.id}`}
+                        name="condition_detail"
+                        placeholder="Ej.: prima de L 8,000 o requisitos del aval"
+                      />
+                    </div>
                     <div className="field decision-reason">
                       <label htmlFor={`reason-${app.id}`}>
                         Motivo y observaciones
                       </label>
-                      <input id={`reason-${app.id}`} name="reason" required />
+                      <textarea
+                        id={`reason-${app.id}`}
+                        name="reason"
+                        placeholder="Explica claramente qué falta o el motivo de la decisión."
+                        required
+                        rows={3}
+                      />
                     </div>
                     <button className="button" type="submit">
-                      Registrar decisión
+                      Registrar y notificar
                     </button>
                   </form>
                 )}

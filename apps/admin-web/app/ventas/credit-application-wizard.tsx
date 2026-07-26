@@ -15,7 +15,6 @@ import {
   ScanLine,
   ShieldCheck,
   Smartphone,
-  Upload,
 } from "lucide-react";
 
 import {
@@ -23,13 +22,14 @@ import {
   parseHondurasIdentityText,
 } from "@/lib/honduras-id";
 import type { ParsedHondurasIdentity } from "@/lib/honduras-id";
-import { parseContactCard } from "@/lib/contact-card";
 import { calculateApplicationDefaults } from "@/lib/application-defaults";
+import { calculateFinancingQuote } from "@/lib/financing";
 import { lookupExistingCustomer, submitCreditApplication } from "./actions";
 import {
   IdentityCameraScanner,
   type IdentityScannerSide,
 } from "./identity-camera-scanner";
+import { SelfieCapture } from "./selfie-capture";
 
 export type BranchOption = {
   readonly id: string;
@@ -68,21 +68,20 @@ type FormValues = {
   reference_two_phone: string;
   reference_two_relationship: string;
   requested_price: string;
+  sex: string;
   term: string;
 };
 
 type ReferencePrefix = "reference_one" | "reference_two";
-
-type ContactSelection = {
-  readonly name?: readonly string[];
-  readonly tel?: readonly string[];
-};
-
-type ContactsManager = {
-  select(
-    properties: readonly ["name", "tel"],
-    options: Readonly<{ multiple: false }>,
-  ): Promise<readonly ContactSelection[]>;
+type ValidationIssue = {
+  readonly field?:
+    | keyof FormValues
+    | "address_proof"
+    | "branch_id"
+    | "inventory_unit_id"
+    | "selfie";
+  readonly message: string;
+  readonly step: number;
 };
 
 type BarcodeResult = { readonly rawValue: string };
@@ -125,6 +124,7 @@ const initialValues: FormValues = {
   reference_two_phone: "",
   reference_two_relationship: "",
   requested_price: "",
+  sex: "",
   term: "",
 };
 
@@ -145,6 +145,101 @@ function money(value: number): string {
     style: "currency",
     currency: "HNL",
   }).format(value);
+}
+
+function percent(value: number): string {
+  return new Intl.NumberFormat("es-HN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value);
+}
+
+function birthDateForForm(value: string): string {
+  if (!value) return "";
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+  const local = value.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  if (local) return `${local[1]}-${local[2]}-${local[3]}`;
+  return value;
+}
+
+function birthDateForSubmit(value: string): string {
+  const local = value.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  if (local) return `${local[3]}-${local[2]}-${local[1]}`;
+  return value;
+}
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function phoneDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function isValidDisplayBirthDate(value: string): boolean {
+  const match = value.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return false;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 1900 &&
+    year <= new Date().getFullYear() &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function isPlausibleIdentityName(value: string, minimumWords = 1): boolean {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = normalized.split(" ").filter((word) => word.length >= 2);
+  if (words.length < minimumWords) return false;
+  if (
+    /^(NOMBRE|NOMBRES|FORENAME|APELLIDO|APELLIDOS|SURNAME|APELUDO|APEIUDO)$/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  return words.every(
+    (word) =>
+      !/^(NOMBRE|NOMBRES|FORENAME|APELLIDO|APELLIDOS|SURNAME|APELUDO|APEIUDO)$/.test(
+        word,
+      ),
+  );
+}
+
+function suspiciousIdentityNameReason(
+  field: "firstName" | "lastName",
+  value: string,
+): string {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+  if (/\bJUSEL\b/.test(normalized)) {
+    return "El nombre parece incompleto. Verifica si debe decir JUSELL.";
+  }
+  if (/\bZ?A?CACERES\b/.test(normalized) && !/\bCACERES\b/.test(normalized)) {
+    return "El apellido parece mal leído. Revisa la captura o corrige el apellido.";
+  }
+  if (!isPlausibleIdentityName(value, field === "lastName" ? 2 : 1)) {
+    return field === "lastName"
+      ? "El apellido no parece válido. Revisa la captura o corrígelo."
+      : "El nombre no parece válido. Revisa la captura o corrígelo.";
+  }
+  return "";
 }
 
 async function detectBarcode(file: File): Promise<string> {
@@ -168,32 +263,72 @@ async function readIdentity(
   file: File,
   onProgress: (message: string) => void,
 ): Promise<ParsedHondurasIdentity> {
-  onProgress("Buscando datos de la identidad…");
+  onProgress("Verificando documento…");
   const barcodeValue = await detectBarcode(file);
   const barcodeIdentity = parseHondurasIdentityText(barcodeValue);
   if (identityFieldsFound(barcodeIdentity) >= 3) return barcodeIdentity;
 
   const { recognize } = await import("tesseract.js");
-  const result = await recognize(file, "spa", {
+  const result = await recognize(file, "spa+eng", {
     logger: (message) => {
       if (message.status === "recognizing text") {
-        onProgress(`Leyendo identidad… ${Math.round(message.progress * 100)}%`);
+        onProgress(`Verificando documento… ${Math.round(message.progress * 100)}%`);
       } else if (message.status === "loading language traineddata") {
-        onProgress("Preparando lectura en español…");
+        onProgress("Preparando verificación…");
       }
     },
   });
   return parseHondurasIdentityText(`${barcodeValue}\n${result.data.text}`);
 }
 
+function identityFileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function readableIdentityResult(
+  side: IdentityScannerSide,
+  identity: ParsedHondurasIdentity,
+): Readonly<{ accepted: boolean; message: string }> {
+  const displayBirthDate = birthDateForForm(identity.birthDate);
+  const hasValidDni = /^\d{4}-\d{4}-\d{5}$/.test(identity.dni);
+  const hasValidBirthDate =
+    Boolean(displayBirthDate) && isValidDisplayBirthDate(displayBirthDate);
+  const hasValidFirstName = isPlausibleIdentityName(identity.firstName);
+  const hasValidLastName = isPlausibleIdentityName(identity.lastName, 2);
+  const hasSex = identity.sex === "female" || identity.sex === "male";
+  const accepted =
+    side === "front"
+      ? hasValidDni && hasValidBirthDate && hasValidFirstName && hasValidLastName
+      : hasValidBirthDate && hasSex && (hasValidFirstName || hasValidLastName);
+
+  return accepted
+    ? {
+        accepted: true,
+        message:
+          side === "front"
+            ? "Documento validado. Revisa la vista previa antes de continuar."
+            : "Documento validado. Revisa la vista previa antes de continuar.",
+      }
+    : {
+        accepted: false,
+        message:
+          side === "front"
+            ? "No se pudo validar la identidad. Mejora luz, enfoque y encuadre."
+            : "No se pudo validar la identidad. Mejora luz, enfoque y encuadre.",
+      };
+}
+
 function InputField({
   help,
+  inputMode,
   label,
   max,
   min,
   name,
   onBlur,
   onChange,
+  pattern,
+  placeholder,
   readOnly = false,
   required = true,
   step,
@@ -201,12 +336,15 @@ function InputField({
   value,
 }: Readonly<{
   help?: string;
+  inputMode?: "decimal" | "email" | "numeric" | "search" | "tel" | "text" | "url";
   label: string;
   max?: number | undefined;
   min?: number;
   name: keyof FormValues;
   onBlur?: () => void;
   onChange: (name: keyof FormValues, value: string) => void;
+  pattern?: string;
+  placeholder?: string;
   readOnly?: boolean;
   required?: boolean;
   step?: number | string;
@@ -223,6 +361,9 @@ function InputField({
         name={name}
         onBlur={onBlur}
         onChange={(event) => onChange(name, event.target.value)}
+        inputMode={inputMode}
+        pattern={pattern}
+        placeholder={placeholder}
         readOnly={readOnly}
         required={required}
         step={step}
@@ -238,6 +379,7 @@ function CaptureCard({
   accept = "image/jpeg,image/png",
   capture,
   description,
+  fileName,
   icon,
   id,
   label,
@@ -248,6 +390,7 @@ function CaptureCard({
   accept?: string;
   capture?: "environment" | "user";
   description: string;
+  fileName?: string | undefined;
   icon: ReactNode;
   id: string;
   label: string;
@@ -258,6 +401,7 @@ function CaptureCard({
   return (
     <label
       className={`capture-card ${preview ? "has-preview" : ""}`}
+      data-validation-field={id}
       htmlFor={id}
     >
       <input
@@ -280,18 +424,22 @@ function CaptureCard({
             unoptimized
           />
         </span>
+      ) : fileName ? (
+        <span className="capture-icon ready" aria-hidden="true">
+          <CheckCircle2 size={23} />
+        </span>
       ) : (
         <span className="capture-icon" aria-hidden="true">
           {icon}
         </span>
       )}
       <span className="capture-copy">
-        <strong>{preview ? `${label} lista` : label}</strong>
+        <strong>{preview || fileName ? `${label} listo` : label}</strong>
         <small>
-          {preview ? "Toca para reemplazar la imagen" : description}
+          {preview || fileName ? fileName ?? "Toca para reemplazar el archivo" : description}
         </small>
       </span>
-      {preview ? (
+      {preview || fileName ? (
         <CheckCircle2 className="capture-check" aria-hidden="true" size={22} />
       ) : null}
     </label>
@@ -300,19 +448,12 @@ function CaptureCard({
 
 function ReferenceCard({
   number,
-  onContactPick,
   onFieldChange,
-  onVCard,
   prefix,
   values,
 }: Readonly<{
   number: 1 | 2;
-  onContactPick: (prefix: ReferencePrefix) => Promise<void>;
   onFieldChange: (name: keyof FormValues, value: string) => void;
-  onVCard: (
-    event: ChangeEvent<HTMLInputElement>,
-    prefix: ReferencePrefix,
-  ) => Promise<void>;
   prefix: ReferencePrefix;
   values: FormValues;
 }>) {
@@ -327,26 +468,6 @@ function ReferenceCard({
         <div>
           <span className="step">Referencia {number}</span>
           <h3>Contacto verificable</h3>
-        </div>
-        <div className="contact-actions">
-          <button
-            className="button secondary compact"
-            onClick={() => void onContactPick(prefix)}
-            type="button"
-          >
-            <ContactRound aria-hidden="true" size={16} />
-            Elegir contacto
-          </button>
-          <label className="vcard-button" htmlFor={`${prefix}_vcard`}>
-            <Upload aria-hidden="true" size={15} />
-            Importar .vcf
-            <input
-              accept=".vcf,text/vcard,text/x-vcard"
-              id={`${prefix}_vcard`}
-              onChange={(event) => void onVCard(event, prefix)}
-              type="file"
-            />
-          </label>
         </div>
       </div>
       <div className="reference-fields">
@@ -752,17 +873,22 @@ export function CreditApplicationWizard({
   branches,
   error,
   inventory,
+  interestRate,
   maximumTerm,
   minimumDownPaymentPercentage,
 }: Readonly<{
   branches: readonly BranchOption[];
   error?: string | undefined;
   inventory: readonly InventoryOption[];
+  interestRate: number | null;
   maximumTerm: number | null;
   minimumDownPaymentPercentage: number | null;
 }>) {
   const formRef = useRef<HTMLFormElement>(null);
   const lastLookupDni = useRef("");
+  const readableIdentityCacheRef = useRef(
+    new Map<string, ParsedHondurasIdentity>(),
+  );
   const [step, setStep] = useState(1);
   const [values, setValues] = useState<FormValues>(initialValues);
   const [selectedBranch, setSelectedBranch] = useState(
@@ -771,8 +897,12 @@ export function CreditApplicationWizard({
   const [selectedInventory, setSelectedInventory] = useState("");
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [addressProofFile, setAddressProofFile] = useState<File | null>(null);
   const [frontPreview, setFrontPreview] = useState("");
   const [backPreview, setBackPreview] = useState("");
+  const [selfiePreview, setSelfiePreview] = useState("");
+  const [addressProofPreview, setAddressProofPreview] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerSide, setScannerSide] = useState<IdentityScannerSide>("front");
   const [scanMessage, setScanMessage] = useState(
@@ -782,7 +912,7 @@ export function CreditApplicationWizard({
     "idle" | "loading" | "success" | "warning"
   >("idle");
   const [lookupMessage, setLookupMessage] = useState("");
-  const [contactMessage, setContactMessage] = useState("");
+  const [clientError, setClientError] = useState("");
   const previousStep = useRef(step);
 
   useEffect(() => {
@@ -795,11 +925,12 @@ export function CreditApplicationWizard({
 
   const branchInventory = useMemo(
     () =>
-      inventory.filter(
-        (unit) => !selectedBranch || unit.branchId === selectedBranch,
-      ),
+      selectedBranch
+        ? inventory.filter((unit) => unit.branchId === selectedBranch)
+        : [],
     [inventory, selectedBranch],
   );
+  const assignedBranch = branches.length === 1 ? branches[0] : null;
   const selectedUnit = inventory.find((unit) => unit.id === selectedInventory);
   const generatedDefaults = selectedUnit
     ? calculateApplicationDefaults(
@@ -809,9 +940,297 @@ export function CreditApplicationWizard({
       )
     : null;
   const minimumDownAmount = generatedDefaults?.downPayment ?? null;
+  const quotedPrice = Number(values.requested_price) || selectedUnit?.cashPrice || 0;
+  const quotedDownPayment = Number(values.down_payment) || 0;
+  const quotedTerm = Number(values.term) || maximumTerm || 0;
+  const administrativeFeePercentage = 3;
+  const quote = calculateFinancingQuote({
+    administrativeFeePercentage,
+    downPayment: quotedDownPayment,
+    monthlyInterestRate: interestRate ?? 3.5,
+    price: quotedPrice,
+    term: quotedTerm,
+  });
 
   function setField(name: keyof FormValues, value: string) {
+    if (clientError) setClientError("");
     setValues((current) => ({ ...current, [name]: value }));
+  }
+
+  function validationIssueForStep(targetStep: number): ValidationIssue | null {
+    const applicantPhone = phoneDigits(values.phone);
+    const referenceOnePhone = phoneDigits(values.reference_one_phone);
+    const referenceTwoPhone = phoneDigits(values.reference_two_phone);
+
+    if (targetStep === 1) {
+      if (!frontFile) {
+        return {
+          field: "dni",
+          message: "Primero captura el frente de la identidad.",
+          step: 1,
+        };
+      }
+      if (!backFile) {
+        return {
+          field: "dni",
+          message: "Falta capturar el reverso de la identidad.",
+          step: 1,
+        };
+      }
+      if (values.dni.replace(/\D/g, "").length !== 13) {
+        return {
+          field: "dni",
+          message: "El DNI debe contener exactamente 13 dígitos.",
+          step: 1,
+        };
+      }
+      if (!isValidDisplayBirthDate(values.birth_date)) {
+        return {
+          field: "birth_date",
+          message: "La fecha de nacimiento debe ir en formato DD-MM-AAAA.",
+          step: 1,
+        };
+      }
+      if (!values.sex) {
+        return { field: "sex", message: "Selecciona el sexo del cliente.", step: 1 };
+      }
+      const firstNameProblem = suspiciousIdentityNameReason(
+        "firstName",
+        values.first_name,
+      );
+      if (firstNameProblem) {
+        return { field: "first_name", message: firstNameProblem, step: 1 };
+      }
+      const lastNameProblem = suspiciousIdentityNameReason(
+        "lastName",
+        values.last_name,
+      );
+      if (lastNameProblem) {
+        return { field: "last_name", message: lastNameProblem, step: 1 };
+      }
+      if (applicantPhone.length !== 8) {
+        return {
+          field: "phone",
+          message: "El teléfono del cliente debe tener 8 dígitos.",
+          step: 1,
+        };
+      }
+      if (values.email && !emailPattern.test(values.email)) {
+        return {
+          field: "email",
+          message: "Ingresa un correo válido o deja el campo vacío.",
+          step: 1,
+        };
+      }
+      if (Number(values.dependents) < 0) {
+        return {
+          field: "dependents",
+          message: "Los dependientes no pueden ser negativos.",
+          step: 1,
+        };
+      }
+    }
+
+    if (targetStep === 2) {
+      if (!values.current_address.trim()) {
+        return {
+          field: "current_address",
+          message: "Ingresa la dirección actual del cliente.",
+          step: 2,
+        };
+      }
+      if (!values.employer_name.trim()) {
+        return {
+          field: "employer_name",
+          message: "Ingresa la empresa o actividad económica del cliente.",
+          step: 2,
+        };
+      }
+      if (Number(values.employment_months) < 0) {
+        return {
+          field: "employment_months",
+          message: "La antigüedad laboral no puede ser negativa.",
+          step: 2,
+        };
+      }
+      if (Number(values.monthly_income) <= 0) {
+        return {
+          field: "monthly_income",
+          message: "El ingreso mensual debe ser mayor que cero.",
+          step: 2,
+        };
+      }
+      if (Number(values.monthly_expenses) < 0) {
+        return {
+          field: "monthly_expenses",
+          message: "Los gastos mensuales no pueden ser negativos.",
+          step: 2,
+        };
+      }
+      if (Number(values.monthly_expenses) >= Number(values.monthly_income)) {
+        return {
+          field: "monthly_expenses",
+          message: "Los gastos no pueden ser iguales o mayores al ingreso.",
+          step: 2,
+        };
+      }
+    }
+
+    if (targetStep === 3) {
+      if (!values.reference_one_name.trim()) {
+        return {
+          field: "reference_one_name",
+          message: "Ingresa el nombre de la primera referencia.",
+          step: 3,
+        };
+      }
+      if (referenceOnePhone.length !== 8) {
+        return {
+          field: "reference_one_phone",
+          message: "El teléfono de la primera referencia debe tener 8 dígitos.",
+          step: 3,
+        };
+      }
+      if (!values.reference_one_relationship) {
+        return {
+          field: "reference_one_relationship",
+          message: "Selecciona la relación de la primera referencia.",
+          step: 3,
+        };
+      }
+      if (!values.reference_two_name.trim()) {
+        return {
+          field: "reference_two_name",
+          message: "Ingresa el nombre de la segunda referencia.",
+          step: 3,
+        };
+      }
+      if (referenceTwoPhone.length !== 8) {
+        return {
+          field: "reference_two_phone",
+          message: "El teléfono de la segunda referencia debe tener 8 dígitos.",
+          step: 3,
+        };
+      }
+      if (!values.reference_two_relationship) {
+        return {
+          field: "reference_two_relationship",
+          message: "Selecciona la relación de la segunda referencia.",
+          step: 3,
+        };
+      }
+      if (referenceOnePhone === referenceTwoPhone) {
+        return {
+          field: "reference_two_phone",
+          message: "Las dos referencias no pueden tener el mismo teléfono.",
+          step: 3,
+        };
+      }
+      if (
+        referenceOnePhone === applicantPhone ||
+        referenceTwoPhone === applicantPhone
+      ) {
+        return {
+          field:
+            referenceOnePhone === applicantPhone
+              ? "reference_one_phone"
+              : "reference_two_phone",
+          message:
+            "El teléfono de una referencia no puede ser el mismo del cliente.",
+          step: 3,
+        };
+      }
+    }
+
+    if (targetStep === 4) {
+      if (!selfieFile) {
+        return {
+          field: "selfie",
+          message: "Falta capturar la selfie de verificación del cliente.",
+          step: 4,
+        };
+      }
+      if (!addressProofFile) {
+        return {
+          field: "address_proof",
+          message: "Falta cargar el comprobante de domicilio.",
+          step: 4,
+        };
+      }
+    }
+
+    if (targetStep === 5) {
+      if (!selectedBranch) {
+        return { field: "branch_id", message: "Selecciona la tienda.", step: 5 };
+      }
+      if (!selectedInventory) {
+        return {
+          field: "inventory_unit_id",
+          message: "Selecciona el dispositivo que se financiará.",
+          step: 5,
+        };
+      }
+      if (Number(values.requested_price) <= 0) {
+        return {
+          field: "requested_price",
+          message: "El dispositivo seleccionado no tiene precio válido.",
+          step: 5,
+        };
+      }
+      if (
+        minimumDownAmount !== null &&
+        Number(values.down_payment) < minimumDownAmount
+      ) {
+        return {
+          field: "down_payment",
+          message: `La prima mínima permitida es ${money(minimumDownAmount)}.`,
+          step: 5,
+        };
+      }
+      if (Number(values.down_payment) >= Number(values.requested_price)) {
+        return {
+          field: "down_payment",
+          message: "La prima debe ser menor que el precio del equipo.",
+          step: 5,
+        };
+      }
+      if (Number(values.term) <= 0) {
+        return {
+          field: "term",
+          message: "Ingresa el plazo del crédito.",
+          step: 5,
+        };
+      }
+      if (maximumTerm !== null && Number(values.term) > maximumTerm) {
+        return {
+          field: "term",
+          message: `El plazo máximo permitido es ${maximumTerm} meses.`,
+          step: 5,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function markValidationIssue(issue: ValidationIssue) {
+    setClientError(issue.message);
+    setScanState("warning");
+    setScanMessage(issue.message);
+
+    window.setTimeout(() => {
+      const form = formRef.current;
+      if (!form) return;
+      form
+        .querySelectorAll(".field-control-error")
+        .forEach((element) => element.classList.remove("field-control-error"));
+      if (!issue.field) return;
+      const target = form.querySelector<HTMLElement>(
+        `[data-validation-field="${issue.field}"],[name="${issue.field}"],#${issue.field}`,
+      );
+      target?.classList.add("field-control-error");
+      target?.focus({ preventScroll: true });
+    }, 40);
   }
 
   async function enrichFromExistingCustomer(
@@ -846,9 +1265,10 @@ export function CreditApplicationWizard({
         last_name:
           result.values?.last_name || identity?.lastName || current.last_name,
         birth_date:
-          result.values?.birth_date ||
-          identity?.birthDate ||
+          birthDateForForm(result.values?.birth_date ?? "") ||
+          birthDateForForm(identity?.birthDate ?? "") ||
           current.birth_date,
+        sex: identity?.sex || current.sex,
       }));
       setLookupMessage(
         identityMismatch
@@ -857,9 +1277,31 @@ export function CreditApplicationWizard({
       );
     } else {
       setLookupMessage(
-        "Cliente nuevo: verifica los datos leídos y completa teléfono y correo.",
+        "Cliente nuevo: completa teléfono y correo.",
       );
     }
+  }
+
+  async function validateReadableIdentityCapture(
+    side: IdentityScannerSide,
+    file: File,
+  ) {
+    const key = identityFileKey(file);
+    setScanState("loading");
+    setScanMessage("Verificando documento…");
+
+    const identity = await readIdentity(file, (message) =>
+      setScanMessage(message),
+    );
+    const result = readableIdentityResult(side, identity);
+    if (result.accepted) {
+      readableIdentityCacheRef.current.set(key, identity);
+    } else {
+      readableIdentityCacheRef.current.delete(key);
+    }
+    setScanState(result.accepted ? "success" : "warning");
+    setScanMessage(result.message);
+    return result;
   }
 
   async function processIdentityFile(side: IdentityScannerSide, file: File) {
@@ -873,29 +1315,32 @@ export function CreditApplicationWizard({
       setBackPreview(URL.createObjectURL(file));
     }
 
-    const sideName = side === "front" ? "frente" : "reverso";
     setScanState("loading");
-    setScanMessage(`Leyendo el ${sideName} de la identidad…`);
+    setScanMessage("Verificando documento…");
 
     try {
-      const identity = await readIdentity(file, (message) =>
-        setScanMessage(
-          `${sideName === "frente" ? "Frente" : "Reverso"}: ${message}`,
-        ),
-      );
+      const key = identityFileKey(file);
+      const cachedIdentity = readableIdentityCacheRef.current.get(key);
+      const identity =
+        cachedIdentity ??
+        (await readIdentity(file, (message) =>
+          setScanMessage(message),
+        ));
+      readableIdentityCacheRef.current.delete(key);
       const found = identityFieldsFound(identity);
       setValues((current) => ({
         ...current,
         dni: identity.dni || current.dni,
         first_name: identity.firstName || current.first_name,
         last_name: identity.lastName || current.last_name,
-        birth_date: identity.birthDate || current.birth_date,
+        birth_date: birthDateForForm(identity.birthDate) || current.birth_date,
+        sex: identity.sex || current.sex,
       }));
       setScanState(found >= 3 ? "success" : "warning");
       setScanMessage(
         found >= 3
-          ? "Identidad leída. Confirma los datos autocompletados antes de continuar."
-          : "La captura quedó guardada; completa manualmente cualquier dato que no se haya podido leer.",
+          ? "Documento procesado. Verifica los datos antes de continuar."
+          : "Documento guardado. Completa manualmente los datos pendientes.",
       );
       if (identity.dni) {
         await enrichFromExistingCustomer(identity.dni, identity);
@@ -903,9 +1348,26 @@ export function CreditApplicationWizard({
     } catch {
       setScanState("warning");
       setScanMessage(
-        "La captura quedó guardada, pero no pudimos leerla automáticamente. Puedes completar los datos manualmente.",
+        "Documento guardado. Completa manualmente los datos pendientes.",
       );
     }
+  }
+
+  function handleSelfieCapture(file: File | null) {
+    if (clientError) setClientError("");
+    if (selfiePreview) URL.revokeObjectURL(selfiePreview);
+    setSelfieFile(file);
+    setSelfiePreview(file ? URL.createObjectURL(file) : "");
+  }
+
+  function handleAddressProofChange(event: ChangeEvent<HTMLInputElement>) {
+    if (clientError) setClientError("");
+    const file = event.target.files?.[0] ?? null;
+    if (addressProofPreview) URL.revokeObjectURL(addressProofPreview);
+    setAddressProofFile(file);
+    setAddressProofPreview(
+      file && file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+    );
   }
 
   function openScanner(side: IdentityScannerSide) {
@@ -914,6 +1376,15 @@ export function CreditApplicationWizard({
   }
 
   function validateCurrentStep(): boolean {
+    const issue = validationIssueForStep(step);
+    if (issue) {
+      markValidationIssue(issue);
+      if (step === 1 && (!frontFile || !backFile)) {
+        openScanner(frontFile ? "back" : "front");
+      }
+      return false;
+    }
+
     if (step === 1 && (!frontFile || !backFile)) {
       const missingSide = frontFile ? "back" : "front";
       setScanState("warning");
@@ -924,27 +1395,126 @@ export function CreditApplicationWizard({
       return false;
     }
 
+    if (step === 4 && !selfieFile) {
+      setScanState("warning");
+      setScanMessage("Falta capturar la selfie de verificación del cliente.");
+      return false;
+    }
+
+    if (step === 4 && !addressProofFile) {
+      setScanState("warning");
+      setScanMessage("Falta cargar el comprobante de domicilio.");
+      return false;
+    }
+
     const section = formRef.current?.querySelector<HTMLElement>(
       `[data-wizard-step="${step}"]`,
     );
     if (!section) return false;
+
+    const birthDateInput =
+      section.querySelector<HTMLInputElement>('input[name="birth_date"]');
+    if (birthDateInput) {
+      birthDateInput.setCustomValidity(
+        isValidDisplayBirthDate(birthDateInput.value)
+          ? ""
+          : "Escribe la fecha completa en formato DD-MM-AAAA.",
+      );
+    }
+
+    const firstNameInput =
+      section.querySelector<HTMLInputElement>('input[name="first_name"]');
+    if (firstNameInput) {
+      firstNameInput.setCustomValidity(
+        suspiciousIdentityNameReason("firstName", firstNameInput.value),
+      );
+    }
+
+    const lastNameInput =
+      section.querySelector<HTMLInputElement>('input[name="last_name"]');
+    if (lastNameInput) {
+      lastNameInput.setCustomValidity(
+        suspiciousIdentityNameReason("lastName", lastNameInput.value),
+      );
+    }
+
+    const emailInput =
+      section.querySelector<HTMLInputElement>('input[name="email"]');
+    if (emailInput) {
+      emailInput.setCustomValidity(
+        !emailInput.value || emailPattern.test(emailInput.value)
+          ? ""
+          : "Ingresa un correo válido.",
+      );
+    }
+
     const controls = [
       ...section.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-        "input[required],select[required]",
+        "input:not([type='hidden']),select",
       ),
     ];
+    controls.forEach((control) => {
+      if (control.checkValidity()) control.classList.remove("field-control-error");
+    });
     const invalid = controls.find((control) => !control.checkValidity());
     if (invalid) {
+      invalid.classList.add("field-control-error");
+      setScanState("warning");
+      setScanMessage("Revisa los campos marcados en rojo.");
+      setClientError(
+        invalid.validationMessage || "Revisa los campos marcados en rojo.",
+      );
       invalid.reportValidity();
       return false;
     }
+    setClientError("");
+    return true;
+  }
+
+  function validateAllStepsBeforeSubmit(): boolean {
+    for (let targetStep = 1; targetStep <= steps.length; targetStep += 1) {
+      const issue = validationIssueForStep(targetStep);
+      if (!issue) continue;
+      setStep(targetStep);
+      markValidationIssue(issue);
+      return false;
+    }
+
+    const form = formRef.current;
+    if (form && !form.checkValidity()) {
+      const invalid = form.querySelector<HTMLInputElement | HTMLSelectElement>(
+        "input:invalid,select:invalid",
+      );
+      const section = invalid?.closest<HTMLElement>("[data-wizard-step]");
+      const invalidStep = Number(section?.dataset.wizardStep || step);
+      setStep(Number.isFinite(invalidStep) && invalidStep > 0 ? invalidStep : step);
+      setClientError(
+        invalid?.validationMessage || "Revisa los campos marcados en rojo.",
+      );
+      window.setTimeout(() => {
+        invalid?.classList.add("field-control-error");
+        invalid?.reportValidity();
+      }, 40);
+      return false;
+    }
+
+    setClientError("");
     return true;
   }
 
   async function submitWithIdentityFiles(formData: FormData) {
     if (frontFile) formData.set("dni_front", frontFile);
     if (backFile) formData.set("dni_back", backFile);
+    if (selfieFile) formData.set("selfie", selfieFile);
+    if (addressProofFile) formData.set("address_proof", addressProofFile);
+    formData.set("birth_date", birthDateForSubmit(values.birth_date));
     await submitCreditApplication(formData);
+  }
+
+  function handleFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (!validateAllStepsBeforeSubmit()) {
+      event.preventDefault();
+    }
   }
 
   function goToStep(nextStep: number) {
@@ -956,6 +1526,7 @@ export function CreditApplicationWizard({
   }
 
   function handleBranchChange(branchId: string) {
+    if (clientError) setClientError("");
     setSelectedBranch(branchId);
     setSelectedInventory("");
     setValues((current) => ({
@@ -967,6 +1538,7 @@ export function CreditApplicationWizard({
   }
 
   function handleInventoryChange(inventoryId: string) {
+    if (clientError) setClientError("");
     setSelectedInventory(inventoryId);
     const unit = inventory.find((candidate) => candidate.id === inventoryId);
     if (!unit) {
@@ -992,56 +1564,13 @@ export function CreditApplicationWizard({
     }));
   }
 
-  async function chooseContact(prefix: ReferencePrefix) {
-    setContactMessage("");
-    const contacts = (navigator as Navigator & { contacts?: ContactsManager })
-      .contacts;
-    if (!contacts) {
-      setContactMessage(
-        "Este navegador no permite abrir contactos desde una conexión local. Puedes importar el contacto en formato .vcf o escribirlo manualmente.",
-      );
-      return;
-    }
-
-    try {
-      const selected = await contacts.select(["name", "tel"], {
-        multiple: false,
-      });
-      const contact = selected[0];
-      const name = contact?.name?.[0] ?? "";
-      const phone = contact?.tel?.[0] ?? "";
-      if (!name || !phone) return;
-      setField(`${prefix}_name` as keyof FormValues, name);
-      setField(`${prefix}_phone` as keyof FormValues, phone);
-      setContactMessage(
-        "Contacto importado. Solo falta indicar la relación con el cliente.",
-      );
-    } catch {
-      setContactMessage("No se seleccionó ningún contacto.");
-    }
-  }
-
-  async function importVCard(
-    event: ChangeEvent<HTMLInputElement>,
-    prefix: ReferencePrefix,
-  ) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const contact = parseContactCard(await file.text());
-    if (!contact) {
-      setContactMessage("El archivo no contiene un nombre y teléfono válidos.");
-      return;
-    }
-    setField(`${prefix}_name` as keyof FormValues, contact.name);
-    setField(`${prefix}_phone` as keyof FormValues, contact.phone);
-    setContactMessage(
-      "Contacto importado. Solo falta indicar la relación con el cliente.",
-    );
-  }
-
   return (
     <div className="credit-wizard">
-      {error ? (
+      {clientError ? (
+        <div className="error" role="alert">
+          {clientError}
+        </div>
+      ) : error ? (
         <div className="error" role="alert">
           {error}
         </div>
@@ -1052,6 +1581,7 @@ export function CreditApplicationWizard({
       <form
         action={submitWithIdentityFiles}
         className="wizard-form"
+        onSubmit={handleFormSubmit}
         ref={formRef}
       >
         <section
@@ -1067,44 +1597,58 @@ export function CreditApplicationWizard({
               <span>Paso 1 de 5</span>
               <h2 tabIndex={-1}>Escanear identidad</h2>
               <p>
-                Fotografía el frente y reverso. El sistema leerá los datos y
+                Escanea el frente y reverso. El sistema leerá los datos y
                 guardará ambas imágenes en el expediente.
               </p>
             </div>
           </div>
 
-          <div className="identity-scanner-entry">
-            <div className="identity-scanner-visual" aria-hidden="true">
-              <div className="identity-card-outline">
-                <span className="identity-card-photo" />
-                <span className="identity-card-line wide" />
-                <span className="identity-card-line" />
-                <span className="identity-card-line short" />
-                <i />
+          {frontFile && backFile ? (
+            <div className="identity-scan-complete">
+              <CheckCircle2 aria-hidden="true" size={24} />
+              <div>
+                <strong>Identidad capturada</strong>
+                <span>Frente y reverso guardados.</span>
               </div>
-              <span className="identity-scan-beam" />
-            </div>
-            <div className="identity-scanner-copy">
-              <span className="scanner-kicker">
-                <ScanLine aria-hidden="true" size={15} /> Escáner con cámara
-              </span>
-              <h3>Enmarca la identidad y captura ambos lados</h3>
-              <p>
-                La cámara muestra una guía con la proporción correcta, recorta
-                la tarjeta y lee automáticamente el DNI, nombre y fecha de
-                nacimiento.
-              </p>
-              <button
-                className="button scanner-launch-button"
-                onClick={() => openScanner(frontFile ? "back" : "front")}
-                type="button"
-              >
-                <Camera aria-hidden="true" size={18} />
-                {frontFile || backFile ? "Continuar escaneo" : "Abrir escáner"}
+              <button onClick={() => openScanner("front")} type="button">
+                Repetir escaneo
               </button>
             </div>
-          </div>
+          ) : (
+            <div className="identity-scanner-entry">
+              <div className="identity-scanner-visual" aria-hidden="true">
+                <div className="identity-card-outline">
+                  <span className="identity-card-photo" />
+                  <span className="identity-card-line wide" />
+                  <span className="identity-card-line" />
+                  <span className="identity-card-line short" />
+                  <i />
+                </div>
+                <span className="identity-scan-beam" />
+              </div>
+              <div className="identity-scanner-copy">
+                <span className="scanner-kicker">
+                  <ScanLine aria-hidden="true" size={15} /> Escáner con cámara
+                </span>
+                <h3>Enmarca la identidad y captura ambos lados</h3>
+                <p>
+                  La cámara muestra una guía con la proporción correcta, recorta
+                  la tarjeta y lee automáticamente el DNI, nombre, apellidos,
+                  fecha de nacimiento y sexo cuando el documento lo permite.
+                </p>
+                <button
+                  className="button scanner-launch-button"
+                  onClick={() => openScanner(frontFile ? "back" : "front")}
+                  type="button"
+                >
+                  <Camera aria-hidden="true" size={18} />
+                  {frontFile ? "Escanear reverso" : "Abrir escáner"}
+                </button>
+              </div>
+            </div>
+          )}
 
+          {frontFile && backFile ? null : (
           <div className="identity-capture-results">
             {(
               [
@@ -1153,7 +1697,9 @@ export function CreditApplicationWizard({
               </article>
             ))}
           </div>
+          )}
 
+          {frontFile && backFile && scanState === "success" ? null : (
           <div className={`scan-status ${scanState}`} role="status">
             {scanState === "loading" ? (
               <LoaderCircle className="spin" aria-hidden="true" size={18} />
@@ -1164,6 +1710,7 @@ export function CreditApplicationWizard({
             )}
             <span>{scanMessage}</span>
           </div>
+          )}
           {lookupMessage ? (
             <div className="customer-lookup-note">
               <ShieldCheck aria-hidden="true" size={17} />
@@ -1180,12 +1727,28 @@ export function CreditApplicationWizard({
               value={values.dni}
             />
             <InputField
+              inputMode="numeric"
               label="Fecha de nacimiento"
               name="birth_date"
               onChange={setField}
-              type="date"
+              pattern="\d{2}-\d{2}-\d{4}"
+              placeholder="DD-MM-AAAA"
               value={values.birth_date}
             />
+            <div className="field">
+              <label htmlFor="sex">Sexo</label>
+              <select
+                id="sex"
+                name="sex"
+                onChange={(event) => setField("sex", event.target.value)}
+                required
+                value={values.sex}
+              >
+                <option value="">Selecciona</option>
+                <option value="female">Femenino</option>
+                <option value="male">Masculino</option>
+              </select>
+            </div>
             <InputField
               label="Nombres"
               name="first_name"
@@ -1209,6 +1772,7 @@ export function CreditApplicationWizard({
               label="Correo"
               name="email"
               onChange={setField}
+              pattern={emailPattern.source}
               required={false}
               type="email"
               value={values.email}
@@ -1335,30 +1899,21 @@ export function CreditApplicationWizard({
               <span>Paso 3 de 5</span>
               <h2 tabIndex={-1}>Referencias personales</h2>
               <p>
-                Elige contactos del teléfono o importa sus tarjetas para
-                completar nombre y número.
+                Solicita al cliente dos referencias verificables y escribe los
+                datos proporcionados.
               </p>
             </div>
           </div>
-          {contactMessage ? (
-            <div className="notice contact-notice" role="status">
-              {contactMessage}
-            </div>
-          ) : null}
           <div className="reference-grid">
             <ReferenceCard
               number={1}
-              onContactPick={chooseContact}
               onFieldChange={setField}
-              onVCard={importVCard}
               prefix="reference_one"
               values={values}
             />
             <ReferenceCard
               number={2}
-              onContactPick={chooseContact}
               onFieldChange={setField}
-              onVCard={importVCard}
               prefix="reference_two"
               values={values}
             />
@@ -1384,21 +1939,24 @@ export function CreditApplicationWizard({
             </div>
           </div>
           <div className="identity-capture-grid supplemental-documents">
-            <CaptureCard
-              accept="image/jpeg,image/png"
-              capture="user"
-              description="Abre la cámara frontal"
-              icon={<Camera size={24} />}
-              id="selfie"
-              label="Selfie del cliente"
-            />
+            <div className="field full-span" data-validation-field="selfie">
+              <label>Selfie del cliente</label>
+              <SelfieCapture
+                file={selfieFile}
+                onCapture={handleSelfieCapture}
+                preview={selfiePreview}
+              />
+            </div>
             <CaptureCard
               accept="image/jpeg,image/png,application/pdf"
               capture="environment"
               description="Fotografía o selecciona el recibo"
+              fileName={addressProofFile?.name}
               icon={<FileImage size={23} />}
               id="address_proof"
               label="Comprobante de domicilio"
+              onChange={handleAddressProofChange}
+              preview={addressProofPreview}
             />
           </div>
           <p className="document-safety-note">
@@ -1426,23 +1984,38 @@ export function CreditApplicationWizard({
             </div>
           </div>
           <div className="wizard-fields two-columns">
-            <div className="field">
-              <label htmlFor="branch_id">Tienda</label>
-              <select
-                id="branch_id"
-                name="branch_id"
-                onChange={(event) => handleBranchChange(event.target.value)}
-                required
-                value={selectedBranch}
-              >
-                <option value="">Selecciona una tienda</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {assignedBranch ? (
+              <div className="field readonly-field">
+                <label htmlFor="branch_id_display">Tienda asignada</label>
+                <input
+                  id="branch_id_display"
+                  readOnly
+                  value={assignedBranch.name}
+                />
+                <input name="branch_id" type="hidden" value={assignedBranch.id} />
+                <small className="field-help">
+                  El vendedor solo puede vender dispositivos de su tienda.
+                </small>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="branch_id">Tienda</label>
+                <select
+                  id="branch_id"
+                  name="branch_id"
+                  onChange={(event) => handleBranchChange(event.target.value)}
+                  required
+                  value={selectedBranch}
+                >
+                  <option value="">Selecciona una tienda</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="field">
               <label htmlFor="inventory_unit_id">Dispositivo disponible</label>
               <select
@@ -1515,6 +2088,63 @@ export function CreditApplicationWizard({
                 </span>
               </div>
             </div>
+            <div className="financing-summary full-span">
+              <div className="financing-summary-head">
+                <div>
+                  <span className="eyebrow">Cálculo de cuota</span>
+                  <strong>{money(quote.monthlyInstallment)} / mes</strong>
+                </div>
+                <span>{quote.term} cuotas</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Precio del equipo</dt>
+                  <dd>{money(quote.price)}</dd>
+                </div>
+                <div>
+                  <dt>Prima</dt>
+                  <dd>- {money(quote.downPayment)}</dd>
+                </div>
+                <div>
+                  <dt>Saldo financiado</dt>
+                  <dd>{money(quote.principal)}</dd>
+                </div>
+                <div>
+                  <dt>Gastos administrativos</dt>
+                  <dd>
+                    {money(quote.administrativeFee)} (
+                    {percent(quote.administrativeFeePercentage)}%)
+                  </dd>
+                </div>
+                <div>
+                  <dt>Total base a financiar</dt>
+                  <dd>{money(quote.financedSubtotal)}</dd>
+                </div>
+                <div>
+                  <dt>Tasa aplicada</dt>
+                  <dd>
+                    {percent(quote.monthlyInterestRate)}% mensual ·{" "}
+                    {percent(quote.annualEffectiveRate)}% efectivo anual
+                  </dd>
+                </div>
+                <div>
+                  <dt>Interés generado</dt>
+                  <dd>{money(quote.interestAmount)}</dd>
+                </div>
+                <div>
+                  <dt>Total financiado a pagar</dt>
+                  <dd>{money(quote.totalFinancedToPay)}</dd>
+                </div>
+                <div>
+                  <dt>Total cliente incluyendo prima</dt>
+                  <dd>{money(quote.totalCustomerPays)}</dd>
+                </div>
+              </dl>
+              <p>
+                Método: cuota nivelada sobre el saldo financiado más gastos. Se
+                actualiza al cambiar prima, plazo o dispositivo.
+              </p>
+            </div>
             <label className="consent">
               <input name="consent_data_processing" type="checkbox" required />{" "}
               El cliente autoriza el tratamiento de sus datos.
@@ -1567,6 +2197,7 @@ export function CreditApplicationWizard({
         onCapture={(side, file) => void processIdentityFile(side, file)}
         onClose={() => setScannerOpen(false)}
         open={scannerOpen}
+        validateCapture={validateReadableIdentityCapture}
       />
     </div>
   );

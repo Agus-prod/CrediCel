@@ -36,6 +36,7 @@ export default async function NewSale({
     { data: inventory },
     { data: maximumTermData },
     { data: minimumDownPaymentData },
+    { data: interestRateData },
   ] = await Promise.all([
     supabase
       .from("user_branch_access")
@@ -53,6 +54,9 @@ export default async function NewSale({
     }),
     supabase.rpc("resolve_configuration", {
       p_key: "credit.minimum_down_payment_percentage",
+    }),
+    supabase.rpc("resolve_configuration", {
+      p_key: "credit.interest_rate",
     }),
   ]);
 
@@ -91,6 +95,7 @@ export default async function NewSale({
           branches={branches}
           error={error}
           inventory={inventoryOptions}
+          interestRate={resolvedNumber(interestRateData)}
           maximumTerm={resolvedNumber(maximumTermData)}
           minimumDownPaymentPercentage={resolvedNumber(minimumDownPaymentData)}
         />

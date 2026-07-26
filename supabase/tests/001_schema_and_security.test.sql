@@ -42,12 +42,12 @@ select col_is_unique('public','customers',array['organization_id','normalized_dn
 select col_is_unique('public','inventory_units',array['organization_id','imei_1'],'IMEI1 unique per organization');
 select col_is_unique('public','inventory_units',array['organization_id','imei_2'],'IMEI2 unique per organization');
 select col_is_unique('public','inventory_units',array['organization_id','serial_number'],'serial unique per organization');
-select row_security_active('public','customers','customers RLS enabled');
-select row_security_active('public','inventory_units','inventory RLS enabled');
-select row_security_active('public','credit_applications','applications RLS enabled');
-select row_security_active('public','transfer_reports','transfer reports RLS enabled');
-select row_security_active('public','customer_documents','documents RLS enabled');
-select row_security_active('public','credit_accounts','credit accounts RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.customers'::regclass),'customers RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.inventory_units'::regclass),'inventory RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.credit_applications'::regclass),'applications RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.transfer_reports'::regclass),'transfer reports RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.customer_documents'::regclass),'documents RLS enabled');
+select ok((select relrowsecurity from pg_class where oid='public.credit_accounts'::regclass),'credit accounts RLS enabled');
 select policies_are('public','audit_logs',array['audit_read'],'audit only exposes read policy');
 select triggers_are('public','audit_logs',array['audit_logs_immutable'],'audit is immutable');
 select * from finish();

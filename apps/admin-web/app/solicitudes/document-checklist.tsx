@@ -8,6 +8,7 @@ export function DocumentChecklist({
   documents,
 }: {
   readonly documents: readonly {
+    readonly created_at: string;
     readonly document_type: string;
     readonly signed_url: string | null;
   }[];
@@ -20,9 +21,15 @@ export function DocumentChecklist({
       <strong id="document-review-title">Verificación documental</strong>
       <ul>
         {required.map((requiredDocument) => {
-          const received = documents.find(
-            (document) => document.document_type === requiredDocument.type,
-          );
+          const received = documents
+            .filter(
+              (document) => document.document_type === requiredDocument.type,
+            )
+            .sort(
+              (left, right) =>
+                new Date(right.created_at).getTime() -
+                new Date(left.created_at).getTime(),
+            )[0];
           return (
             <li
               className={received ? "document-ok" : "document-missing"}

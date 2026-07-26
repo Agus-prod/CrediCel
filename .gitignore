@@ -8,3 +8,8 @@ coverage
 *.tsbuildinfo
 *.log
 supabase/.temp
+supabase/.branches
+.expo
+certificates
+.mdm-local
+*.traineddata

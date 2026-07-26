@@ -8,6 +8,10 @@ El vendedor abre **Nueva venta** desde teléfono o computadora y captura identid
 
 CrediCel calcula una recomendación explicable usando cuota/ingreso, ingreso disponible, estabilidad laboral, prima y documentos. El analista de la tienda confirma el expediente y decide: aprobar, rechazar, solicitar información o condicionar a mayor prima, aval o documento adicional. La recomendación nunca sustituye la decisión humana.
 
+Cuando el analista solicita información, **Motivo y observaciones** se publica en el hilo de la solicitud. El vendedor lo ve en **Mis solicitudes**, puede responder y adjuntar una foto o PDF desde el teléfono. Una respuesta de texto queda en el chat sin cerrar el pendiente; el caso vuelve automáticamente a **En revisión** únicamente cuando se carga el tipo de documento solicitado, ligado a esa solicitud y posterior al requerimiento. El hilo conserva autor, rol, fecha, documento solicitado y adjunto; es inmutable, auditable y visible únicamente para el vendedor que originó el caso y el equipo de crédito autorizado de esa tienda.
+
+Si el analista condiciona el crédito, registra también el monto o requisito exacto de la mayor prima, aval o documento adicional. Ese detalle se publica junto con la decisión para que el vendedor no dependa de instrucciones fuera de CrediCel. El gerente de tienda puede cumplir el rol de analista dentro de su propia tienda.
+
 ## 3. Formalización y entrega
 
 Una solicitud aprobada pasa a caja o al gerente. En una sola transacción se registra aceptación/firma, se cobra la prima, se crea el contrato, se genera la cuenta con sus cuotas, se marca el equipo vendido y se habilita el portal del cliente. Si cualquier parte falla, todo se revierte.

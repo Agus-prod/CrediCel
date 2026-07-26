@@ -1,5 +1,13 @@
 -- Desarrollo local únicamente. No ejecutar en producción.
 insert into public.organizations(id,name,commercial_name) values('10000000-0000-0000-0000-000000000001','CrediCel Honduras','CrediCel');
+-- La demostración usa dos tiendas, por lo que necesita el plan Crecimiento
+-- antes de insertar recursos sujetos a límites de suscripción.
+update public.organization_subscriptions
+set plan_id = (select id from public.subscription_plans where code = 'medium'),
+    status = 'active',
+    current_period_started_at = now(),
+    current_period_ends_at = now() + interval '1 month'
+where organization_id = '10000000-0000-0000-0000-000000000001';
 insert into public.business_units(id,organization_id,legal_name,commercial_name,owner_name,rtn) values
 ('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','CrediCel Centro, S. de R.L.','CrediCel Centro','Socio Centro','08019000000001'),
 ('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','CrediCel Norte, S. de R.L.','CrediCel Norte','Socio Norte','08019000000002');
@@ -7,9 +15,17 @@ insert into public.branches(id,organization_id,business_unit_id,name,code,branch
 ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','Centro Tegucigalpa','TGU-CENTRO','store','Tegucigalpa, Honduras','+504 2200-0001'),
 ('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','Comayagüela','TGU-COMAYAGUELA','store','Comayagüela, Honduras','+504 2200-0002');
 insert into public.roles(organization_id,name,description,is_system) select '10000000-0000-0000-0000-000000000001',name,description,true from (values
-('super_admin','Administración total'),('organization_admin','Administración organizacional'),('credit_manager','Gerencia de crédito'),('credit_analyst','Análisis de crédito'),('branch_manager','Gerencia de punto'),('salesperson','Ventas'),('cashier','Caja'),('inventory_manager','Inventario'),('collections_agent','Cobranza'),('auditor','Auditoría de solo lectura')) seed(name,description);
+('super_admin','Administración total'),('organization_admin','Administración organizacional'),('credit_manager','Gerencia de crédito'),('credit_analyst','Análisis de crédito'),('branch_manager','Gerencia de punto'),('salesperson','Ventas'),('cashier','Caja'),('inventory_manager','Inventario'),('collections_agent','Cobranza'),('auditor','Auditoría de solo lectura')) seed(name,description)
+on conflict (organization_id,name) do update
+set description = excluded.description,
+    is_system = excluded.is_system;
 insert into public.configuration_definitions(key,description,value_type,allowed_scope_types) values('credit.minimum_down_payment_percentage','Porcentaje mínimo de prima','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign']),('credit.maximum_term_months','Plazo máximo','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign']),('credit.interest_rate','Tasa de interés configurable','number',array['organization','business_unit','branch','customer_type','category','brand','model','price_range','credit_product','campaign'])
 on conflict (key) do nothing;
+
+-- Cuenta ficticia para demostrar el flujo local. Sustituir por la cuenta
+-- comercial real mediante una migración privada antes de producción.
+insert into public.platform_bank_accounts(bank_name,account_name,account_number,account_type,currency,instructions)
+values('Banco Demo','CrediCel SaaS','**** 0001','checking','HNL','Cuenta demostrativa: no realizar transferencias reales.');
 
 insert into public.product_brands(id,organization_id,name) values('40000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Apple'),('40000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','Samsung');
 insert into public.product_models(id,organization_id,brand_id,name) values('50000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','iPhone 15'),('50000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000002','Galaxy S24');

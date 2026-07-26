@@ -38,12 +38,29 @@ export type IdentityCameraScannerProps = Readonly<{
   onComplete?: (files: CompletedIdentityScannerFiles) => void;
   /** Fired from the close button, Escape key, or final action. */
   onClose: () => void;
+  /** Optional readability check before a captured image is accepted. */
+  validateCapture?: (
+    side: IdentityScannerSide,
+    file: File,
+  ) => Promise<Readonly<{ accepted: boolean; message: string }>>;
 }>;
 
-type CameraStatus = "idle" | "starting" | "ready" | "error";
+type CameraStatus = "idle" | "starting" | "ready" | "validating" | "error";
 
 const EMPTY_FILES: IdentityScannerFiles = { front: null, back: null };
 const CARD_ASPECT_RATIO = 85.6 / 53.98;
+const AUTO_CAPTURE_FRAMES = 3;
+
+type FrameQuality = Readonly<{
+  brightness: number;
+  edgeScore: number;
+  sharpness: number;
+  status: "searching" | "steady" | "ready";
+}>;
+
+function emptyQuality(): FrameQuality {
+  return { brightness: 0, edgeScore: 0, sharpness: 0, status: "searching" };
+}
 
 function sideLabel(side: IdentityScannerSide): string {
   return side === "front" ? "frente" : "reverso";
@@ -51,12 +68,12 @@ function sideLabel(side: IdentityScannerSide): string {
 
 function cameraErrorMessage(error: unknown): string {
   if (!window.isSecureContext) {
-    return "En esta conexión de prueba usaremos la cámara del teléfono. Toca el botón y encuadra la identidad completa.";
+    return "Para escanear en vivo desde el sitio abre CrediCel con HTTPS. Esta conexión local HTTP no permite usar la cámara embebida en el navegador.";
   }
 
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
-      return "No se autorizó la cámara. Permite el acceso o usa la cámara del teléfono.";
+      return "No se autorizó la cámara. Permite el acceso para escanear desde el sitio.";
     }
     if (
       error.name === "NotFoundError" ||
@@ -69,7 +86,7 @@ function cameraErrorMessage(error: unknown): string {
     }
   }
 
-  return "No fue posible iniciar la cámara. Puedes tomar la foto con la cámara del teléfono.";
+  return "No fue posible iniciar la cámara. Revisa permisos e intenta nuevamente.";
 }
 
 function useObjectUrl(file: File | null): string {
@@ -96,18 +113,22 @@ export function IdentityCameraScanner({
   onClose,
   onComplete,
   open,
+  validateCapture,
 }: IdentityCameraScannerProps) {
   const [side, setSide] = useState<IdentityScannerSide>(initialSide);
   const [files, setFiles] = useState<IdentityScannerFiles>(EMPTY_FILES);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [quality, setQuality] = useState<FrameQuality>(emptyQuality);
   const [completed, setCompleted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const stableFramesRef = useRef(0);
+  const validationAttemptRef = useRef(0);
   const wasOpenRef = useRef(false);
 
   const pendingPreview = useObjectUrl(pendingFile);
@@ -190,6 +211,8 @@ export function IdentityCameraScanner({
     });
     setSide(initialSide);
     setPendingFile(null);
+    setQuality(emptyQuality());
+    stableFramesRef.current = 0;
     setCompleted(false);
     closeButtonRef.current?.focus();
   }, [initialFiles?.back, initialFiles?.front, initialSide, open, stopCamera]);
@@ -216,7 +239,7 @@ export function IdentityCameraScanner({
     };
   }, [onClose, open]);
 
-  const captureFrame = useCallback(async () => {
+  const getGuideFrame = useCallback(() => {
     const video = videoRef.current;
     const guide = guideRef.current;
     if (
@@ -224,10 +247,7 @@ export function IdentityCameraScanner({
       !guide ||
       video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
     ) {
-      setErrorMessage(
-        "La cámara todavía se está preparando. Intenta de nuevo.",
-      );
-      return;
+      return null;
     }
 
     const videoRect = video.getBoundingClientRect();
@@ -240,7 +260,6 @@ export function IdentityCameraScanner({
     const renderedHeight = video.videoHeight * scale;
     const hiddenX = (renderedWidth - videoRect.width) / 2;
     const hiddenY = (renderedHeight - videoRect.height) / 2;
-
     const sourceX = Math.max(
       0,
       (guideRect.left - videoRect.left + hiddenX) / scale,
@@ -258,9 +277,24 @@ export function IdentityCameraScanner({
       video.videoHeight - sourceY,
     );
 
+    return { sourceHeight, sourceWidth, sourceX, sourceY, video };
+  }, []);
+
+  const captureFrame = useCallback(async () => {
+    if (cameraStatus === "validating") return;
+
+    const frame = getGuideFrame();
+    if (!frame) {
+      setErrorMessage(
+        "La cámara todavía se está preparando. Intenta de nuevo.",
+      );
+      return;
+    }
+
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(sourceWidth));
-    canvas.height = Math.max(1, Math.round(sourceHeight));
+    const outputScale = Math.max(1, 1280 / frame.sourceWidth);
+    canvas.width = Math.max(1, Math.round(frame.sourceWidth * outputScale));
+    canvas.height = Math.max(1, Math.round(frame.sourceHeight * outputScale));
     const context = canvas.getContext("2d");
     if (!context) {
       setErrorMessage(
@@ -270,11 +304,11 @@ export function IdentityCameraScanner({
     }
 
     context.drawImage(
-      video,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
+      frame.video,
+      frame.sourceX,
+      frame.sourceY,
+      frame.sourceWidth,
+      frame.sourceHeight,
       0,
       0,
       canvas.width,
@@ -282,7 +316,7 @@ export function IdentityCameraScanner({
     );
 
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.92),
+      canvas.toBlob(resolve, "image/jpeg", 0.96),
     );
     if (!blob) {
       setErrorMessage(
@@ -291,14 +325,142 @@ export function IdentityCameraScanner({
       return;
     }
 
-    stopCamera();
-    setPendingFile(
-      new File([blob], `identidad-${sideLabel(side)}-${Date.now()}.jpg`, {
+    const file = new File(
+      [blob],
+      `identidad-${sideLabel(side)}-${Date.now()}.jpg`,
+      {
         type: "image/jpeg",
         lastModified: Date.now(),
-      }),
+      },
     );
-  }, [side, stopCamera]);
+
+    if (validateCapture) {
+      const attempt = validationAttemptRef.current + 1;
+      validationAttemptRef.current = attempt;
+      setCameraStatus("validating");
+      setErrorMessage("Verificando que el documento sea legible…");
+
+      try {
+        const result = await validateCapture(side, file);
+        if (validationAttemptRef.current !== attempt) return;
+
+        if (!result.accepted) {
+          setCameraStatus("ready");
+          setQuality(emptyQuality());
+          stableFramesRef.current = 0;
+          setErrorMessage(result.message);
+          return;
+        }
+
+        setErrorMessage(result.message);
+      } catch {
+        if (validationAttemptRef.current !== attempt) return;
+        setCameraStatus("ready");
+        setQuality(emptyQuality());
+        stableFramesRef.current = 0;
+        setErrorMessage(
+          "No se pudo comprobar la lectura. Acerca la identidad, mejora la luz e intenta de nuevo.",
+        );
+        return;
+      }
+    }
+
+    stopCamera();
+    setCameraStatus("idle");
+    setPendingFile(file);
+  }, [cameraStatus, getGuideFrame, side, stopCamera, validateCapture]);
+
+  const inspectFrame = useCallback((): FrameQuality | null => {
+    const frame = getGuideFrame();
+    if (!frame) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = Math.max(80, Math.round(160 / CARD_ASPECT_RATIO));
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+
+    context.drawImage(
+      frame.video,
+      frame.sourceX,
+      frame.sourceY,
+      frame.sourceWidth,
+      frame.sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let luminance = 0;
+    let edgeCount = 0;
+    let sharpness = 0;
+    let previous = 0;
+
+    for (let index = 0; index < data.length; index += 4) {
+      const current =
+        (data[index] ?? 0) * 0.299 +
+        (data[index + 1] ?? 0) * 0.587 +
+        (data[index + 2] ?? 0) * 0.114;
+      luminance += current;
+      if (index > 0) {
+        const delta = Math.abs(current - previous);
+        sharpness += delta;
+        if (delta > 28) edgeCount += 1;
+      }
+      previous = current;
+    }
+
+    const pixels = data.length / 4;
+    const brightness = luminance / pixels;
+    const edgeScore = edgeCount / pixels;
+    const normalizedSharpness = sharpness / pixels;
+    const ready =
+      brightness >= 58 &&
+      brightness <= 218 &&
+      normalizedSharpness >= 11 &&
+      edgeScore >= 0.09;
+    const steady =
+      brightness >= 42 && brightness <= 232 && normalizedSharpness >= 7;
+
+    return {
+      brightness,
+      edgeScore,
+      sharpness: normalizedSharpness,
+      status: ready ? "ready" : steady ? "steady" : "searching",
+    };
+  }, [getGuideFrame]);
+
+  useEffect(() => {
+    if (!open || pendingFile || completed || cameraStatus !== "ready") return;
+
+    const interval = window.setInterval(() => {
+      const nextQuality = inspectFrame();
+      if (!nextQuality) return;
+      setQuality(nextQuality);
+
+      if (nextQuality.status === "ready") {
+        stableFramesRef.current += 1;
+      } else {
+        stableFramesRef.current = 0;
+      }
+
+      if (stableFramesRef.current >= AUTO_CAPTURE_FRAMES) {
+        stableFramesRef.current = 0;
+        void captureFrame();
+      }
+    }, 650);
+
+    return () => window.clearInterval(interval);
+  }, [
+    cameraStatus,
+    captureFrame,
+    completed,
+    inspectFrame,
+    open,
+    pendingFile,
+  ]);
 
   const acceptPhoto = useCallback(() => {
     if (!pendingFile) return;
@@ -326,21 +488,42 @@ export function IdentityCameraScanner({
   }, []);
 
   const handleFallbackFile = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = "";
       if (!file) return;
       if (!file.type.startsWith("image/")) {
-        setErrorMessage(
-          "Selecciona una fotografía en formato JPG, PNG o WebP.",
-        );
+        setErrorMessage("Selecciona una fotografía en formato JPG, PNG o WebP.");
         return;
       }
-      stopCamera();
-      setErrorMessage("");
+
+      if (validateCapture) {
+        setCameraStatus("validating");
+        setErrorMessage("Verificando que el documento sea legible…");
+        try {
+          const result = await validateCapture(side, file);
+          if (!result.accepted) {
+            setCameraStatus("ready");
+            setErrorMessage(result.message);
+            return;
+          }
+          setErrorMessage(result.message);
+        } catch {
+          setCameraStatus("ready");
+          setErrorMessage(
+            "No se pudo comprobar la lectura. Sube una imagen más nítida e intenta de nuevo.",
+          );
+          return;
+        }
+      } else {
+        setErrorMessage("");
+      }
+
       setPendingFile(file);
+      setCameraStatus("idle");
+      stopCamera();
     },
-    [stopCamera],
+    [side, stopCamera, validateCapture],
   );
 
   const retake = useCallback((nextSide: IdentityScannerSide) => {
@@ -348,6 +531,8 @@ export function IdentityCameraScanner({
     setSide(nextSide);
     setPendingFile(null);
     setErrorMessage("");
+    setQuality(emptyQuality());
+    stableFramesRef.current = 0;
   }, []);
 
   const finish = useCallback(() => {
@@ -361,6 +546,14 @@ export function IdentityCameraScanner({
         : "Ahora alinea el reverso dentro del marco",
     [side],
   );
+  const qualityLabel =
+    cameraStatus === "validating"
+      ? "Verificando documento..."
+      : quality.status === "ready"
+        ? "Documento estable. Verificando..."
+        : quality.status === "steady"
+          ? "Mantén el documento quieto"
+          : instruction;
   const canRetryLiveCamera =
     typeof window !== "undefined" && window.isSecureContext;
 
@@ -482,8 +675,23 @@ export function IdentityCameraScanner({
                   <div className="liveInstruction" aria-live="polite">
                     {cameraStatus === "starting"
                       ? "Activando cámara…"
-                      : instruction}
+                      : qualityLabel}
                   </div>
+                  {cameraStatus === "ready" ? (
+                    <div
+                      className={`qualityMeter ${quality.status}`}
+                      aria-hidden="true"
+                    >
+                      <span
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(12, quality.sharpness * 5),
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </>
               ) : null}
 
@@ -492,7 +700,7 @@ export function IdentityCameraScanner({
                   <span aria-hidden="true">
                     <Camera size={34} />
                   </span>
-                  <h3>Abre la cámara del teléfono</h3>
+                  <h3>Cámara embebida no disponible</h3>
                   <p>{errorMessage}</p>
                   <button
                     className="primaryAction"
@@ -500,7 +708,7 @@ export function IdentityCameraScanner({
                     type="button"
                   >
                     <Camera aria-hidden="true" size={20} />
-                    Tomar foto
+                    Subir foto de respaldo
                   </button>
                   {canRetryLiveCamera ? (
                     <button
@@ -584,7 +792,7 @@ export function IdentityCameraScanner({
                       type="button"
                     >
                       <Camera aria-hidden="true" size={19} />
-                      Cámara
+                      Respaldo
                     </button>
                   </>
                 )}
@@ -821,6 +1029,32 @@ export function IdentityCameraScanner({
           border: 1px solid rgba(255, 255, 255, 0.16);
           border-radius: 999px;
           backdrop-filter: blur(8px);
+        }
+
+        .qualityMeter {
+          position: absolute;
+          right: 18%;
+          bottom: 72px;
+          left: 18%;
+          z-index: 2;
+          height: 5px;
+          overflow: hidden;
+          background: rgba(255, 255, 255, 0.18);
+          border-radius: 999px;
+        }
+
+        .qualityMeter span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: #f9c846;
+          transition:
+            width 0.22s ease,
+            background 0.22s ease;
+        }
+
+        .qualityMeter.ready span {
+          background: #20d396;
         }
 
         .cameraFallback {
@@ -1126,6 +1360,10 @@ function CapturePreview({
   onRetake: () => void;
   preview: string;
 }>) {
+  if (!preview) {
+    return null;
+  }
+
   return (
     <article className="capturePreview">
       <div>

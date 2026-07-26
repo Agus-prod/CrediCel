@@ -13,7 +13,7 @@ type NavItem = readonly [string, string, readonly string[]];
 const items: readonly NavItem[] = [
   ["/", "Inicio", ["all"]],
   ["/ventas", "Nueva venta", ["salesperson", "branch_manager"]],
-  ["/mis-ventas", "Mis ventas", ["salesperson"]],
+  ["/mis-ventas", "Mis solicitudes", ["salesperson"]],
   ["/clientes", "Mi cartera", ["salesperson"]],
   [
     "/clientes",

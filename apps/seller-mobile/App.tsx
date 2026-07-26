@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import type { Session } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { ErrorBanner } from "./src/components/ui";
+import { ErrorBanner, PrimaryButton } from "./src/components/ui";
 import { getConfigurationError, getSupabase } from "./src/lib/supabase";
 import { InventoryScreen } from "./src/screens/InventoryScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
@@ -25,6 +25,21 @@ const tabs: readonly { readonly id: Tab; readonly label: string }[] = [
   { id: "portfolio", label: "Mi cartera" },
   { id: "application", label: "Nueva solicitud" },
 ];
+
+class ScreenErrorBoundary extends Component<
+  { readonly children: ReactNode },
+  { readonly failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Mobile screen failure", error.message, info.componentStack);
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <View style={styles.screenFailure}><ErrorBanner message="Esta pantalla tuvo un problema. Tus datos guardados no se perdieron."/><PrimaryButton label="Volver a cargar" onPress={() => this.setState({ failed: false })}/></View>;
+  }
+}
 
 export default function App() {
   const configurationError = getConfigurationError();
@@ -124,13 +139,11 @@ export default function App() {
       </View>
       {logoutError && <ErrorBanner message={logoutError} />}
       <View style={styles.content}>
-        {activeTab === "inventory" && <InventoryScreen />}
-        {activeTab === "portfolio" && (
-          <PortfolioScreen userId={session.user.id} />
-        )}
-        {activeTab === "application" && (
-          <NewApplicationScreen userId={session.user.id} />
-        )}
+        <ScreenErrorBoundary key={activeTab}>
+          {activeTab === "inventory" && <InventoryScreen />}
+          {activeTab === "portfolio" && <PortfolioScreen userId={session.user.id} />}
+          {activeTab === "application" && <NewApplicationScreen userId={session.user.id} />}
+        </ScreenErrorBoundary>
       </View>
       <View accessibilityRole="tablist" style={styles.tabBar}>
         {tabs.map((tab) => {
@@ -206,6 +219,7 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: "#fff", fontSize: 13, fontWeight: "800" },
   content: { flex: 1 },
+  screenFailure: { flex: 1, justifyContent: "center", padding: 20 },
   tabBar: {
     backgroundColor: colors.surface,
     borderTopColor: colors.line,
@@ -213,6 +227,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 5,
     paddingHorizontal: 8,
+    paddingBottom: 8,
     paddingTop: 8,
   },
   tab: {

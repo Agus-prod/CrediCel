@@ -63,6 +63,7 @@ export async function middleware(request: NextRequest) {
     "/recuperar-contrasena",
     "/nueva-contrasena",
     "/aceptar-invitacion",
+    "/documentos-demo",
   ].some((path) => request.nextUrl.pathname.startsWith(path));
   if (!user && !publicPath) {
     const target = request.nextUrl.clone();
@@ -73,6 +74,20 @@ export async function middleware(request: NextRequest) {
     const target = request.nextUrl.clone();
     target.pathname = "/";
     return NextResponse.redirect(target);
+  }
+  const subscriptionPath = request.nextUrl.pathname.startsWith("/suscripcion");
+  const platformOperationsPath = request.nextUrl.pathname.startsWith("/operacion/");
+  if (user && !publicPath && !subscriptionPath && !platformOperationsPath) {
+    const { data: summary } = await supabase.rpc("subscription_summary");
+    const subscription = summary && typeof summary === "object" && !Array.isArray(summary)
+      ? (summary as { subscription?: { status?: string } }).subscription
+      : null;
+    if (["expired", "suspended", "cancelled"].includes(subscription?.status ?? "")) {
+      const target = request.nextUrl.clone();
+      target.pathname = "/suscripcion";
+      target.search = "?expired=1";
+      return NextResponse.redirect(target);
+    }
   }
   const routeRule = routeRoles.find(
     ([prefix]) =>

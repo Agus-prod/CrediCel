@@ -79,7 +79,9 @@ values (
 update public.organization_subscriptions
 set
   plan_id = (select id from public.subscription_plans where code = 'growth'),
-  status = 'active'
+  status = 'active',
+  current_period_started_at = now(),
+  current_period_ends_at = now() + interval '1 month'
 where organization_id = '94000000-0000-4000-8000-000000000002';
 
 insert into public.profiles (id, organization_id, full_name)

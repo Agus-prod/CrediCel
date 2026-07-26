@@ -15,7 +15,9 @@ insert into public.organizations (id, name, commercial_name) values
 update public.organization_subscriptions
 set
   plan_id = (select id from public.subscription_plans where code = 'growth'),
-  status = 'active'
+  status = 'active',
+  current_period_started_at = now(),
+  current_period_ends_at = now() + interval '1 month'
 where organization_id = '91000000-0000-0000-0000-000000000001';
 
 insert into public.business_units (
