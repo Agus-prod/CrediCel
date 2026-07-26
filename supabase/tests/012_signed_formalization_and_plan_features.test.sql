@@ -1,0 +1,14 @@
+begin;
+select plan(10);
+select has_column('public','credit_contracts','signature_data','contract stores drawn signature');
+select has_column('public','credit_contracts','consent_text','contract stores consent');
+select has_column('public','credit_contracts','signature_evidence_hash','contract stores evidence hash');
+select has_column('public','credit_contracts','signer_ip','contract stores signer network evidence');
+select has_column('public','credit_contracts','signer_user_agent','contract stores signer device evidence');
+select has_function('public','formalize_signed_credit',array['uuid','text','text','text','text','text','text','text'],'signed formalization exists');
+select has_function('public','has_subscription_feature',array['text'],'feature guard exists');
+select has_function('public','get_my_organization',array[]::text[],'organization document helper exists');
+select ok((select (features->>'legal_templates')::boolean from public.subscription_plans where code='trial'),'trial includes legal documents');
+select ok((select monthly_price=12999 from public.subscription_plans where code='large'),'premium pricing remains active');
+select * from finish();
+rollback;

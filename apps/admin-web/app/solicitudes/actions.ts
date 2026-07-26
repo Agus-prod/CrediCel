@@ -1,6 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 export async function decideApplication(formData: FormData) {
   const supabase = await createServerSupabase();
   const decision = String(formData.get("decision") ?? "");
@@ -99,18 +100,23 @@ export async function sendApplicationMessage(formData: FormData) {
 }
 export async function formalizeApplication(formData: FormData) {
   const supabase = await createServerSupabase();
-  const { data, error } = await supabase.rpc("formalize_credit", {
+  const requestHeaders = await headers();
+  const { data, error } = await supabase.rpc("formalize_signed_credit", {
     p_application_id: String(formData.get("application_id") ?? ""),
     p_signature_name: String(formData.get("signature_name") ?? ""),
+    p_signature_data: String(formData.get("signature_data") ?? ""),
+    p_consent_text: "Acepto el contrato, pagaré, tabla de pagos y tratamiento de datos presentados para este crédito.",
     p_payment_method: String(formData.get("payment_method") ?? ""),
     p_reference: String(formData.get("reference") ?? ""),
+    p_signer_ip: requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+    p_signer_user_agent: requestHeaders.get("user-agent") ?? "",
   });
   if (error)
     redirect(`/solicitudes?error=${encodeURIComponent(error.message)}`);
   const accountId = (data as { account_id?: string } | null)?.account_id;
   if (accountId) {
     redirect(
-      `/proteccion?activated=1&account_id=${encodeURIComponent(accountId)}`,
+      `/creditos/${encodeURIComponent(accountId)}/documentos?activated=1`,
     );
   }
   redirect("/solicitudes?formalized=1");

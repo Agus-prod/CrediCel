@@ -14,6 +14,7 @@ import {
   sendApplicationMessage,
 } from "./actions";
 import { DocumentChecklist } from "./document-checklist";
+import { SignaturePad } from "./signature-pad";
 const labels: Readonly<Record<string, string>> = {
   submitted: "Enviada",
   under_review: "En revisión",
@@ -460,17 +461,7 @@ export default async function Applications({
                     className="decision-form formalization-form"
                   >
                     <input type="hidden" name="application_id" value={app.id} />
-                    <div className="field decision-reason">
-                      <label htmlFor={`signature-${app.id}`}>
-                        Aceptación y firma del cliente
-                      </label>
-                      <input
-                        id={`signature-${app.id}`}
-                        name="signature_name"
-                        placeholder="Nombre completo como firma"
-                        required
-                      />
-                    </div>
+                    <SignaturePad applicationId={app.id} />
                     <div className="field">
                       <label htmlFor={`method-${app.id}`}>Pago de prima</label>
                       <select
