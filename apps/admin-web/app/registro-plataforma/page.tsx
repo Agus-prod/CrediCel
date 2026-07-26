@@ -19,6 +19,9 @@ export default async function PlatformRegistration({
 }) {
   const query = await searchParams;
   const error = readableError(query.error);
+  const waitingForResend = Boolean(
+    query.check_email || query.error?.toLowerCase().includes("security purposes"),
+  );
   return (
     <main className="auth-shell">
       <section className="auth-card platform-register-card">
@@ -27,11 +30,15 @@ export default async function PlatformRegistration({
         <h1>Crea tu cuenta maestra</h1>
         <p className="muted">Administra organizaciones, planes y pagos sin crear una tienda.</p>
         {error && <div className="error">{error}</div>}
-        {query.check_email ? (
+        {waitingForResend ? (
           <div className="platform-confirmation">
             <div className="notice">
-              {query.resent ? "Enviamos un enlace nuevo" : "Revisa tu correo"} en
-              augustocolindres1@gmail.com. Abre únicamente el mensaje más reciente.
+              {query.resent
+                ? "Enviamos un enlace nuevo."
+                : query.error
+                  ? "Espera un minuto antes de solicitar otro enlace."
+                  : "Revisa tu correo."}{" "}
+              Usa augustocolindres1@gmail.com y abre únicamente el mensaje más reciente.
             </div>
             <form action={resendPlatformConfirmation}>
               <button className="button secondary" type="submit">Reenviar confirmación</button>
