@@ -9,6 +9,10 @@ import "./documents.css";
 
 export const metadata: Metadata = {
   title: "CrediCel | Operaciones",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+  },
   description: "Administración multiempresa de ventas a crédito",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "CrediCel" },
   formatDetection: { telephone: false },
