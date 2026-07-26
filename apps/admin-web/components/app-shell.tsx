@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import {
   ALL_BRANCHES_CONTEXT,
@@ -7,6 +8,7 @@ import {
   hasGlobalScope,
 } from "@/lib/branch-context";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { completePendingOrganizationOnboarding } from "@/lib/organization-onboarding.server";
 import { MobileNavigation, NavigationLinks } from "./mobile-navigation";
 
 type NavItem = readonly [string, string, readonly string[]];
@@ -190,6 +192,13 @@ export async function AppShell({
           .eq("profile_id", user.id),
       ])
     : [{ data: null }, { data: [] }, { data: [] }];
+  if (user && !profile) {
+    const recovery = await completePendingOrganizationOnboarding(
+      supabase,
+      user,
+    );
+    if (recovery.completed) redirect("/seleccionar");
+  }
   const roles = new Set(
     (assigned ?? [])
       .map((row) => relationName(row.roles))
