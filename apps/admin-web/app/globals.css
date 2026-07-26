@@ -554,19 +554,39 @@ a {
 nav {
   display: grid;
   gap: 4px;
-  overflow: auto;
+}
+.sidebar > nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+.sidebar > nav::-webkit-scrollbar {
+  width: 7px;
+}
+.sidebar > nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar > nav::-webkit-scrollbar-thumb {
+  background: #ffffff2b;
+  border-radius: 999px;
 }
 .navlink {
   padding: 10px 12px;
   border-radius: 10px;
   color: #b9cec5;
   font-size: 14px;
-  transition: 0.2s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 .navlink:hover {
   background: #ffffff12;
   color: #fff;
-  transform: translateX(3px);
 }
 .navlink.active,
 .navlink[aria-current="page"] {
