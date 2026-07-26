@@ -28,7 +28,11 @@ export async function completePendingOrganizationOnboarding(
   const metadata = user.user_metadata
     ?.organization_onboarding as OnboardingMetadata | undefined;
   if (!metadata) {
-    return { completed: false, error: "missing_onboarding_metadata" };
+    const { error } = await supabase.rpc("ensure_owner_workspace");
+    return {
+      completed: !error,
+      error: error?.message ?? null,
+    };
   }
   const { error } = await supabase.rpc("create_organization_onboarding", {
     p_name: metadata.name ?? "",
