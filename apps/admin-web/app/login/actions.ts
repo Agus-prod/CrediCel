@@ -13,6 +13,8 @@ export async function login(formData: FormData) {
     password,
   });
   if (error) redirect("/login?error=1");
+  const { data: platformOperator } = await supabase.rpc("is_platform_operator");
+  if (platformOperator) redirect("/operacion");
   if (data.user) {
     await completePendingOrganizationOnboarding(supabase, data.user);
   }

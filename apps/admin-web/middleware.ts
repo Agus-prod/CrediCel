@@ -60,6 +60,7 @@ export async function middleware(request: NextRequest) {
   const publicPath = [
     "/login",
     "/registro-organizacion",
+    "/registro-plataforma",
     "/recuperar-contrasena",
     "/nueva-contrasena",
     "/aceptar-invitacion",
@@ -114,6 +115,6 @@ export async function middleware(request: NextRequest) {
 }
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|registro-organizacion).*)",
+    "/((?!_next/static|_next/image|favicon.ico|registro-organizacion|registro-plataforma).*)",
   ],
 };
