@@ -136,6 +136,7 @@ const items: readonly NavItem[] = [
     ["organization_admin", "organization_owner", "super_admin"],
   ],
   ["/suscripcion", "Plan y suscripción", ["organization_owner"]],
+  ["/documentos-legales", "Documentos y políticas", ["organization_admin", "organization_owner", "super_admin"]],
   [
     "/configuracion",
     "Configuración",
@@ -175,7 +176,7 @@ export async function AppShell({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: profile }, { data: assigned }, { data: branchAccess }] = user
+  const [{ data: profile }, { data: assigned }, { data: branchAccess }, { data: isPlatformOperator }] = user
     ? await Promise.all([
         supabase
           .from("profiles")
@@ -190,8 +191,9 @@ export async function AppShell({
           .from("user_branch_access")
           .select("branches(id,name)")
           .eq("profile_id", user.id),
+        supabase.rpc("is_platform_operator"),
       ])
-    : [{ data: null }, { data: [] }, { data: [] }];
+    : [{ data: null }, { data: [] }, { data: [] }, { data: false }];
   if (user && !profile) {
     const recovery = await completePendingOrganizationOnboarding(
       supabase,
@@ -266,6 +268,7 @@ export async function AppShell({
             <small>{roleSummary}</small>
           </div>
         </div>
+        {isPlatformOperator ? <Link className="platform-entry" href="/operacion">Cuenta maestra CrediCel</Link> : null}
         <NavigationLinks items={navigation} label="Navegación principal" />
         <form action={logout}>
           <button className="logout" type="submit">

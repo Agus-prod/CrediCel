@@ -15,7 +15,7 @@ const metricLabels: Readonly<Record<string, string>> = {
 };
 const featureLabels: Readonly<Record<string, string>> = {
   credit: "Ventas y análisis de crédito", inventory: "Inventario y traslados", payments: "Pagos y cuotas",
-  collections: "Cobranza", reports: "Reportes", advanced_audit: "Auditoría avanzada", priority_support: "Soporte prioritario",
+  collections: "Cobranza", reports: "Reportes", advanced_audit: "Auditoría avanzada", priority_support: "Soporte prioritario", legal_templates: "Contratos y documentos personalizados",
 };
 const money = new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", maximumFractionDigits: 0 });
 const relationName = (value: unknown) => Array.isArray(value)

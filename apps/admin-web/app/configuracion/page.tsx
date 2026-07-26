@@ -59,7 +59,7 @@ export default async function Configuration({
         <section className="section">
           <div className="toolbar">
             <div>
-              <div className="eyebrow">Política versionada</div>
+              <div className="eyebrow">Reglas de aprobación</div>
               <h1>Configuración de crédito</h1>
             </div>
           </div>
@@ -82,8 +82,7 @@ export default async function Configuration({
             <div className="eyebrow">Política versionada</div>
             <h1>Configuración de crédito</h1>
             <p className="muted">
-              Los cambios se preparan en un borrador auditable y solo afectan
-              solicitudes nuevas después de publicarse.
+              Define los requisitos que se aplicarán a las nuevas solicitudes.
             </p>
           </div>
         </div>
@@ -138,8 +137,7 @@ export default async function Configuration({
               <div className="eyebrow">Borrador editable</div>
               <h2>Versión {draft.version}</h2>
               <p className="muted">
-                Guardar conserva el borrador; publicar reemplaza atómicamente la
-                versión activa.
+                Revisa los cambios y publícalos cuando estén listos.
               </p>
             </div>
             <span className="badge warning">Borrador</span>
@@ -249,8 +247,7 @@ export default async function Configuration({
             </div>
 
             <p className="muted">
-              Esta fase registra políticas y su versión. No calcula intereses ni
-              una cuota financiera definitiva.
+              Los cambios se aplicarán únicamente a solicitudes nuevas.
             </p>
 
             <div className="form-actions">
