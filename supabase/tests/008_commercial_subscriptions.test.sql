@@ -1,10 +1,11 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(18);
 
 select has_table('public','platform_bank_accounts','platform bank accounts exist');
 select has_table('public','subscription_payment_requests','subscription transfer requests exist');
 select is((select (limits->>'customers')::integer from public.subscription_plans where code='trial'),50,'trial is capped at 50 customers');
+select ok((select (features->>'advanced_audit')::boolean from public.subscription_plans where code='trial'),'trial includes advanced audit');
 select is((select monthly_price from public.subscription_plans where code='small'),1999::numeric,'small monthly price is configured');
 select is((select monthly_price from public.subscription_plans where code='medium'),4999::numeric,'medium monthly price is configured');
 select is((select monthly_price from public.subscription_plans where code='large'),12999::numeric,'large monthly price is configured');
