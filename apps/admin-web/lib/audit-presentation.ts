@@ -241,6 +241,7 @@ function formatDate(value: string): string | null {
   return new Intl.DateTimeFormat("es-HN", {
     dateStyle: "medium",
     timeStyle: value.includes("T") ? "short" : undefined,
+    timeZone: value.includes("T") ? "America/Tegucigalpa" : "UTC",
   }).format(parsed);
 }
 

@@ -30,6 +30,7 @@ function EventIcon({ action }: Readonly<{ action: string }>) {
 const dateFormatter = new Intl.DateTimeFormat("es-HN", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "America/Tegucigalpa",
 });
 
 export default async function AuditLog() {
