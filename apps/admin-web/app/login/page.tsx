@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ArrowRight, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { AuthExperience } from "@/components/auth-experience";
+import { PasswordField } from "@/components/password-field";
 import { login } from "./actions";
 
 export default async function Login({
@@ -9,46 +12,64 @@ export default async function Login({
   const { error } = await searchParams;
 
   return (
-    <main className="login">
-      <div className="login-orb one" />
-      <div className="login-orb two" />
-      <form action={login} className="login-card">
-        <div className="logo">
-          Credi<span>Cel</span>
+    <AuthExperience>
+      <form action={login} className="auth-form-card auth-login-card">
+        <div className="auth-card-heading">
+          <span className="auth-card-icon">
+            <LockKeyhole aria-hidden="true" size={22} />
+          </span>
+          <div>
+            <span className="eyebrow">Acceso seguro</span>
+            <h1>Qué gusto verte</h1>
+            <p className="muted">
+              Ingresa al centro de operaciones de tu negocio.
+            </p>
+          </div>
         </div>
-        <h1>Bienvenido</h1>
-        <p className="muted">Accede al centro de operaciones.</p>
         {error ? (
-          <p className="error">Correo o contraseña incorrectos.</p>
+          <p className="error" role="alert">
+            Correo o contraseña incorrectos.
+          </p>
         ) : null}
         <div className="field">
           <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="nombre@credicel.hn"
-            required
-          />
+          <div className="auth-control">
+            <Mail aria-hidden="true" size={18} />
+            <input
+              autoComplete="email"
+              id="email"
+              name="email"
+              placeholder="tu@empresa.com"
+              required
+              type="email"
+            />
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="password">Contraseña</label>
-          <input id="password" name="password" type="password" required />
-        </div>
-        <button className="button wide" type="submit">
-          Ingresar
-        </button>
+        <PasswordField
+          autoComplete="current-password"
+          id="password"
+          label="Contraseña"
+          name="password"
+          required
+        />
         <Link className="forgot" href="/recuperar-contrasena">
           ¿Olvidaste tu contraseña?
         </Link>
+        <button className="button wide" type="submit">
+          Entrar a CrediCel
+          <ArrowRight aria-hidden="true" size={18} />
+        </button>
         <div className="login-divider">
-          <span>o</span>
+          <span>¿Primera vez aquí?</span>
         </div>
         <Link className="register-link" href="/registro-organizacion">
           Crear una organización
         </Link>
-        <p className="login-help">Acceso exclusivo para personal autorizado</p>
+        <p className="login-help">
+          <ShieldCheck aria-hidden="true" size={14} />
+          Acceso protegido por roles y permisos
+        </p>
       </form>
-    </main>
+    </AuthExperience>
   );
 }

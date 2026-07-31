@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ShieldCheck } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import {
   ALL_BRANCHES_CONTEXT,
@@ -9,14 +10,14 @@ import {
 } from "@/lib/branch-context";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { completePendingOrganizationOnboarding } from "@/lib/organization-onboarding.server";
+import { canAccessAnyRole } from "@/lib/role-access";
 import { MobileNavigation, NavigationLinks } from "./mobile-navigation";
 
 type NavItem = readonly [string, string, readonly string[]];
 const items: readonly NavItem[] = [
   ["/", "Inicio", ["all"]],
   ["/ventas", "Nueva venta", ["salesperson", "branch_manager"]],
-  ["/mis-ventas", "Mis solicitudes", ["salesperson"]],
-  ["/clientes", "Mi cartera", ["salesperson"]],
+  ["/mis-ventas", "Mis solicitudes", ["salesperson", "branch_manager"]],
   [
     "/clientes",
     "Clientes",
@@ -28,6 +29,7 @@ const items: readonly NavItem[] = [
       "super_admin",
     ],
   ],
+  ["/clientes", "Mi cartera", ["salesperson"]],
   [
     "/expedientes",
     "Expedientes",
@@ -41,13 +43,13 @@ const items: readonly NavItem[] = [
       "auditor",
     ],
   ],
-  ["/solicitudes", "Mesa de análisis", ["credit_analyst", "credit_manager"]],
-  ["/solicitudes", "Solicitudes de la tienda", ["branch_manager"]],
   [
     "/solicitudes",
     "Solicitudes",
     ["organization_admin", "organization_owner", "super_admin"],
   ],
+  ["/solicitudes", "Mesa de análisis", ["credit_analyst", "credit_manager"]],
+  ["/solicitudes", "Solicitudes de la tienda", ["branch_manager"]],
   [
     "/creditos",
     "Créditos",
@@ -61,7 +63,6 @@ const items: readonly NavItem[] = [
       "auditor",
     ],
   ],
-  ["/inventario", "Dispositivos disponibles", ["salesperson"]],
   [
     "/inventario",
     "Dispositivos",
@@ -73,6 +74,7 @@ const items: readonly NavItem[] = [
       "super_admin",
     ],
   ],
+  ["/inventario", "Dispositivos disponibles", ["salesperson"]],
   [
     "/transferencias",
     "Traslados",
@@ -136,7 +138,11 @@ const items: readonly NavItem[] = [
     ["organization_admin", "organization_owner", "super_admin"],
   ],
   ["/suscripcion", "Plan y suscripción", ["organization_owner"]],
-  ["/documentos-legales", "Documentos y políticas", ["organization_admin", "organization_owner", "super_admin"]],
+  [
+    "/documentos-legales",
+    "Documentos y políticas",
+    ["organization_admin", "organization_owner", "super_admin"],
+  ],
   [
     "/configuracion",
     "Configuración",
@@ -176,7 +182,12 @@ export async function AppShell({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const [{ data: profile }, { data: assigned }, { data: branchAccess }, { data: isPlatformOperator }] = user
+  const [
+    { data: profile },
+    { data: assigned },
+    { data: branchAccess },
+    { data: isPlatformOperator },
+  ] = user
     ? await Promise.all([
         supabase
           .from("profiles")
@@ -209,7 +220,7 @@ export async function AppShell({
   const visible = items
     .filter(
       ([, , allowed]) =>
-        allowed.includes("all") || allowed.some((role) => roles.has(role)),
+        allowed.includes("all") || canAccessAnyRole(roles, allowed),
     )
     .filter(
       (item, index, all) =>
@@ -256,8 +267,11 @@ export async function AppShell({
       </a>
       <aside className="sidebar">
         <div className="sidebar-heading">
-          <div className="logo">
-            Credi<span>Cel</span>
+          <div className="brand-lockup">
+            <div className="logo">
+              Credi<span>Cel</span>
+            </div>
+            <small>Crédito en movimiento</small>
           </div>
           <MobileNavigation items={navigation} />
         </div>
@@ -268,7 +282,11 @@ export async function AppShell({
             <small>{roleSummary}</small>
           </div>
         </div>
-        {isPlatformOperator ? <Link className="platform-entry" href="/operacion">Cuenta maestra CrediCel</Link> : null}
+        {isPlatformOperator ? (
+          <Link className="platform-entry" href="/operacion">
+            Cuenta maestra CrediCel
+          </Link>
+        ) : null}
         <NavigationLinks items={navigation} label="Navegación principal" />
         <form action={logout}>
           <button className="logout" type="submit">
@@ -281,6 +299,9 @@ export async function AppShell({
           <div>
             <div className="eyebrow">Centro de operaciones</div>
             <div className="brand-title">CrediCel</div>
+            <span className="system-status">
+              <i /> Operación protegida
+            </span>
           </div>
           {scopeOverride ? (
             <div className="scope-chip scope-chip-static">
@@ -300,8 +321,13 @@ export async function AppShell({
         </header>
         <div className="content-enter">{children}</div>
         <footer>
-          Desarrollado por <strong>CrediCel</strong> · Tecnología que impulsa
-          oportunidades
+          <span>
+            Desarrollado por <strong>CrediCel</strong> · Tecnología que impulsa
+            oportunidades
+          </span>
+          <span className="footer-security">
+            <ShieldCheck aria-hidden="true" size={14} /> Acceso protegido
+          </span>
         </footer>
       </main>
     </div>

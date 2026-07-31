@@ -3646,6 +3646,10 @@ export type Database = {
         Args: { p_customer_id: string; p_rotate?: boolean }
         Returns: string
       }
+      set_member_branch_access: {
+        Args: { p_branch_id: string; p_profile_id: string }
+        Returns: undefined
+      }
       publish_configuration_draft: {
         Args: { p_version_id: string }
         Returns: Json

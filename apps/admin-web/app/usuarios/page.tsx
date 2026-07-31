@@ -1,7 +1,10 @@
 import { AppShell } from "@/components/app-shell";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { getPublicAppUrl } from "@/lib/public-url.server";
-import { inviteMember } from "./actions";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { isInvitableRole, roleRequiresBranch } from "@/lib/team-access";
+import { assignMemberBranch } from "./actions";
+import { InviteMemberForm } from "./invite-member-form";
+
 const roleLabels: Readonly<Record<string, string>> = {
   organization_owner: "Propietario",
   organization_admin: "Administrador",
@@ -14,33 +17,54 @@ const roleLabels: Readonly<Record<string, string>> = {
   collections_agent: "Cobranza",
   auditor: "Auditor",
 };
-const relName = (v: unknown) =>
-  Array.isArray(v)
-    ? (v[0] as { name?: string } | undefined)?.name
-    : (v as { name?: string } | null)?.name;
+
+function relation<T>(value: unknown): T | null {
+  return Array.isArray(value) ? ((value[0] as T | undefined) ?? null) : (value as T | null);
+}
+
 export default async function Users({
   searchParams,
 }: {
-  readonly searchParams: Promise<{ error?: string; token?: string }>;
+  readonly searchParams: Promise<{
+    error?: string;
+    token?: string;
+    updated?: string;
+  }>;
 }) {
-  const q = await searchParams;
-  const s = await createServerSupabase();
-  const invitationUrl = q.token
+  const query = await searchParams;
+  const supabase = await createServerSupabase();
+  const invitationUrl = query.token
     ? await getPublicAppUrl(
-        `/aceptar-invitacion?token=${encodeURIComponent(q.token)}`,
+        `/aceptar-invitacion?token=${encodeURIComponent(query.token)}`,
       )
     : null;
   const [{ data: users }, { data: branches }, { data: roles }] =
     await Promise.all([
-      s
+      supabase
         .from("profiles")
         .select(
-          "id,full_name,status,profile_roles(roles(name)),user_branch_access(branches(name))",
+          "id,full_name,status,profile_roles(roles(name)),user_branch_access(branches(id,name))",
         )
         .order("full_name"),
-      s.from("branches").select("id,name").eq("status", "active").order("name"),
-      s.from("roles").select("name").in("name", Object.keys(roleLabels)),
+      supabase
+        .from("branches")
+        .select("id,name")
+        .eq("status", "active")
+        .order("name"),
+      supabase.from("roles").select("name").in("name", Object.keys(roleLabels)),
     ]);
+
+  const branchOptions = (branches ?? []).map((branch) => ({
+    id: branch.id,
+    label: branch.name,
+  }));
+  const roleOptions = (roles ?? [])
+    .filter((role) => isInvitableRole(role.name))
+    .map((role) => ({
+      name: role.name,
+      label: roleLabels[role.name] ?? role.name,
+    }));
+
   return (
     <AppShell>
       <section className="section">
@@ -53,42 +77,96 @@ export default async function Users({
             </p>
           </div>
         </div>
-        {q.error && (
+        {query.error ? (
           <div className="error" role="alert">
-            {q.error}
+            {query.error}
           </div>
-        )}
-        {invitationUrl && (
+        ) : null}
+        {query.updated ? (
+          <div className="notice" role="status">
+            La tienda del integrante se actualizó correctamente.
+          </div>
+        ) : null}
+        {invitationUrl ? (
           <div className="notice invite-result" role="status">
             <strong>Invitación creada.</strong>
             <span>Comparte este enlace con la persona:</span>
             <code>{invitationUrl}</code>
           </div>
-        )}
+        ) : null}
         <div className="workspace-stack">
-          {(users ?? []).map((u) => {
-            const roleRows = u.profile_roles ?? [];
-            const branchRows = u.user_branch_access ?? [];
+          {(users ?? []).map((user) => {
+            const roleNames = (user.profile_roles ?? [])
+              .map(
+                (row) => relation<{ name?: string }>(row.roles)?.name ?? "",
+              )
+              .filter(Boolean);
+            const assignedBranches = (user.user_branch_access ?? [])
+              .map((row) =>
+                relation<{ id?: string; name?: string }>(row.branches),
+              )
+              .filter(
+                (branch): branch is { id: string; name: string } =>
+                  Boolean(branch?.id && branch.name),
+              );
+            const needsBranch = roleNames.some(roleRequiresBranch);
+
             return (
-              <article className="card team-card" key={u.id}>
+              <article className="card team-card" key={user.id}>
                 <div>
-                  <h2>{u.full_name}</h2>
+                  <h2>{user.full_name}</h2>
                   <p className="muted">
-                    {roleRows
-                      .map(
-                        (r) =>
-                          roleLabels[relName(r.roles) ?? ""] ??
-                          relName(r.roles),
-                      )
-                      .join(" · ")}
+                    {roleNames
+                      .map((role) => roleLabels[role] ?? role)
+                      .join(" · ") || "Sin rol asignado"}
                   </p>
                 </div>
-                <div>
-                  {branchRows.map((b) => (
-                    <span className="step" key={relName(b.branches)}>
-                      {relName(b.branches)}
-                    </span>
-                  ))}
+                <div className="team-access">
+                  <div>
+                    {assignedBranches.map((branch) => (
+                      <span className="step" key={branch.id}>
+                        {branch.name}
+                      </span>
+                    ))}
+                    {!assignedBranches.length ? (
+                      <span
+                        className={
+                          needsBranch ? "step team-access-warning" : "step"
+                        }
+                      >
+                        {needsBranch
+                          ? "Sin tienda asignada"
+                          : "Acceso organizacional"}
+                      </span>
+                    ) : null}
+                  </div>
+                  {needsBranch ? (
+                    <form action={assignMemberBranch} className="team-branch-form">
+                      <input name="profile_id" type="hidden" value={user.id} />
+                      <label>
+                        <span>
+                          {assignedBranches.length
+                            ? "Cambiar tienda"
+                            : "Asignar tienda"}
+                        </span>
+                        <select
+                          defaultValue={assignedBranches[0]?.id ?? ""}
+                          name="branch_id"
+                          required
+                        >
+                          <option value="">Seleccionar</option>
+                          {branchOptions.map((branch) => (
+                            <option key={branch.id} value={branch.id}>
+                              {branch.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button className="button secondary compact" type="submit">
+                        Guardar
+                      </button>
+                    </form>
+                  ) : null}
                 </div>
               </article>
             );
@@ -104,45 +182,7 @@ export default async function Users({
               </p>
             </div>
           </div>
-          <form action={inviteMember} className="form">
-            <div className="field">
-              <label htmlFor="full_name">Nombre completo</label>
-              <input id="full_name" name="full_name" required />
-            </div>
-            <div className="field">
-              <label htmlFor="email">Correo</label>
-              <input id="email" name="email" type="email" required />
-            </div>
-            <div className="field">
-              <label htmlFor="role_name">Rol</label>
-              <select id="role_name" name="role_name" required>
-                <option value="">Seleccionar</option>
-                {(roles ?? [])
-                  .filter((r) => r.name !== "organization_owner")
-                  .map((r) => (
-                    <option value={r.name} key={r.name}>
-                      {roleLabels[r.name] ?? r.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="branch_id">Tienda</label>
-              <select id="branch_id" name="branch_id">
-                <option value="">Acceso organizacional</option>
-                {(branches ?? []).map((b) => (
-                  <option value={b.id} key={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-actions">
-              <button className="button" type="submit">
-                Crear invitación
-              </button>
-            </div>
-          </form>
+          <InviteMemberForm branches={branchOptions} roles={roleOptions} />
         </div>
       </section>
     </AppShell>
