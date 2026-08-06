@@ -32,7 +32,8 @@ export default async function NewSale({
     data: { user },
   } = await supabase.auth.getUser();
   const [
-    { data: access },
+    { data: branchAccess },
+    { data: assignedRoles },
     { data: inventory },
     { data: maximumTermData },
     { data: minimumDownPaymentData },
@@ -41,6 +42,10 @@ export default async function NewSale({
     supabase
       .from("user_branch_access")
       .select("branch_id,branches(name)")
+      .eq("profile_id", user?.id ?? ""),
+    supabase
+      .from("profile_roles")
+      .select("roles(name)")
       .eq("profile_id", user?.id ?? ""),
     supabase
       .from("inventory_units")
@@ -60,10 +65,25 @@ export default async function NewSale({
     }),
   ]);
 
-  const branches: BranchOption[] = (access ?? []).map((row) => ({
-    id: row.branch_id,
-    name: relatedName(row.branches) ?? "Tienda",
-  }));
+  const isOrganizationOwner = (assignedRoles ?? []).some(
+    (row) => relatedName(row.roles) === "organization_owner",
+  );
+  const { data: organizationBranches } = isOrganizationOwner
+    ? await supabase
+        .from("branches")
+        .select("id,name")
+        .eq("status", "active")
+        .order("name")
+    : { data: null };
+  const branches: BranchOption[] = isOrganizationOwner
+    ? (organizationBranches ?? []).map((branch) => ({
+        id: branch.id,
+        name: branch.name,
+      }))
+    : (branchAccess ?? []).map((row) => ({
+        id: row.branch_id,
+        name: relatedName(row.branches) ?? "Tienda",
+      }));
   const inventoryOptions: InventoryOption[] = (inventory ?? []).map((unit) => ({
     id: unit.id,
     branchId: unit.current_branch_id,

@@ -1,1 +1,28 @@
-import{redirect}from"next/navigation";import{createServerSupabase}from"./supabase/server";export async function requireAnyRole(allowed:readonly string[]){const supabase=await createServerSupabase();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect("/login");const{data}=await supabase.from("profile_roles").select("roles(name)").eq("profile_id",user.id);const names=(data??[]).flatMap(row=>{const value=row.roles as unknown;return Array.isArray(value)?value.map(item=>(item as{name:string}).name):[(value as{name:string}|null)?.name]}).filter((name):name is string=>Boolean(name));if(!names.some(name=>allowed.includes(name)))redirect("/?denied=1");return{user,roles:names,supabase}}
+import { redirect } from "next/navigation";
+
+import { canAccessAnyRole } from "./role-access";
+import { createServerSupabase } from "./supabase/server";
+
+export async function requireAnyRole(allowed: readonly string[]) {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data } = await supabase
+    .from("profile_roles")
+    .select("roles(name)")
+    .eq("profile_id", user.id);
+  const roles = (data ?? [])
+    .flatMap((row) => {
+      const value = row.roles as unknown;
+      return Array.isArray(value)
+        ? value.map((item) => (item as { name: string }).name)
+        : [(value as { name: string } | null)?.name];
+    })
+    .filter((name): name is string => Boolean(name));
+
+  if (!canAccessAnyRole(roles, allowed)) redirect("/?denied=1");
+  return { user, roles, supabase };
+}

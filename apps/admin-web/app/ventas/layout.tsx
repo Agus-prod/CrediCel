@@ -4,6 +4,6 @@ export default async function SalesLayout({
 }: {
   readonly children: React.ReactNode;
 }) {
-  await requireAnyRole(["salesperson", "branch_manager"]);
+  await requireAnyRole(["salesperson", "branch_manager", "organization_owner"]);
   return children;
 }
